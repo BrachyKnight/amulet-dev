@@ -64,10 +64,10 @@ tuple4RVec_t analyze ( ROOT::VecOps::RVec<int> v, double sampfreq )
 	return make_tuple(tup_center, tdwn_center, tup_cerr, tdwn_cerr);
 }
 
-ROOT::VecOps::RVec<double> temporalize (ROOT::VecOps::RVec<int> ADC_ch, double sampfreq){
-	ROOT::VecOps::RVec<double> aux;
+ROOT::VecOps::RVec<float> temporalize (ROOT::VecOps::RVec<int> ADC_ch, double sampfreq){
+	ROOT::VecOps::RVec<float> aux;
 	for(unsigned int i = 0; i < ADC_ch.size(); i++)
-		aux.push_back(static_cast<double>(i)/sampfreq);
+		aux.push_back(static_cast<float>(i)/(sampfreq));
 	return aux;
 }
 
