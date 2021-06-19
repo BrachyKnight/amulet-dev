@@ -36,6 +36,7 @@ c++ -Wall -o lifetime lifetime.cpp amulet.cc amulet.h `root-config --cflags --gl
 #include <TObject.h>
 #include <TVirtualPad.h>
 #include <TSystem.h>
+#include <TChain.h>
 
 
 using ROOT::RDF::RNode;
@@ -108,24 +109,51 @@ std::pair<double,double> WidthStartStopSquareWaves(rvecdouble_t vUp, rvecdouble_
 int main(int argc, char** argv)
 {
 	//set names from input line
-	if ( argc != 3 && argc != 4 ){ 
+	if ( !(argc >= 4) ){ 
 		std::cout<<"\nINPUT ERROR"<<endl
-				 <<"needs:\noutputDir \nrootInputFile\n"<<endl
-				 <<"as an example \n(ubuntu):\n./lifetime results/ results/run1meas1Timings.root"<<endl;
+		<<"needs:\npath/to/output/directory/ \npath/to/root/input/files/directory/"
+		<<"RUNnumber MEASnumbers (dont specify for all)"<<endl
+		<<"examples: (for saving output into ../DAQprocessed/ and taking data from ../DAQpreproccesed/"
+		<<"./executable ../DAQprocessed/ ../DAQpreproccesed/ 1 2 //for run1meas2"<<endl
+		<<"./executable ../DAQprocessed/ ../DAQpreprocessed/ 4 6a //for run4meas6a"<<endl
+		<<"./executable ../DAQprocessed/ ../DAQpreprocessed/ 9 1 2 3 //for run9meas1 run9meas2 run9meas3"<<endl
+		<<"./executable ../DAQprocessed/ ../DAQpreprocessed/ 1 //for all run1"<<endl;
 		return 1;
 	}
-	bool setRootBatchMode = (argc == 4) ? true : false;
-	string outDir      = argv[1],
-	       rootIn      = argv[2],
-		   rootOut     = rootIn ,
-		   rootOutName = rootOut.substr(rootOut.find_last_of("/")+1);
-	rootOut = outDir + rootOutName;
-	rootOut.replace(rootOut.end()-12, rootOut.end(), "Lifetimes.root"); //assuming it is called somethingTimings.root it translates it into somethingLifetimes.root
-	rootOutName.replace(rootOutName.end()-12, rootOutName.end(), "Lifetimes");
 	
-	//open file and create RDataFrame
-	//ROOT::EnableImplicitMT();       
-	ROOT::RDataFrame d("Timings", rootIn.c_str());
+	//setting I\O file names
+	string outDir = argv[1];
+	string inDir  = argv[2];
+	string runN = argv[3];
+	string OutFileName = outDir+"run"+runN+"meas";
+	std::vector<string> measNs;	
+	std::cout<<"I will process the following files:"<<std::endl;
+	if( argc == 4 ){
+		measNs.push_back("*");
+		printf("%s/run%smeas*_amulet\n",inDir.c_str(),runN.c_str());
+		OutFileName += "_ALL";
+	}else{
+		for(int i = 4; i<argc; i++)
+			measNs.push_back(argv[i]);
+		for(auto measN : measNs){
+			printf("%s/run%smeas%s_amulet\n",inDir.c_str(),runN.c_str(),measN.c_str());
+			OutFileName += "_" + measN;
+		}
+	}
+	OutFileName += ".root";
+	std::cout<<"and save the results in "<<OutFileName<<std::endl<<std::endl;
+
+	//open file(s)
+	TChain myChain("amulet");
+	for(auto measN : measNs)
+		myChain.Add( (inDir+"run"+runN+"meas"+measN+"_amulet.root").c_str() );
+	
+	//use all cores of your machine MultiThreading to speed up analysis
+	//(read RDataFrame documentation for MT warnings)
+	ROOT::EnableImplicitMT();
+	
+	//create df
+	ROOT::RDataFrame d(myChain);
 
 	//define cuts
 	string ch0NupNdwn = "(ch0Nup==ch0Ndwn)";
@@ -161,11 +189,11 @@ int main(int argc, char** argv)
 	                        .Define("DwnwdtSTOP"          , [](std::pair<double,double> wdt){return wdt.second;}, {"wdtStartStop"                } );
 	
 	//save dataframes in external file
-	RNode df_histUp = *dtUpDec.Snapshot("DeltaT UpDecays", rootOut.c_str(), {"Updt", "UpdtErr", "UpSTARTSquareMidPos", "UpSTOPSquareMidPos", "UpwdtSTART", "UpwdtSTOP"} );
+	RNode df_histUp = *dtUpDec.Snapshot("DeltaT UpDecays", OutFileName.c_str(), {"Updt", "UpdtErr", "UpSTARTSquareMidPos", "UpSTOPSquareMidPos", "UpwdtSTART", "UpwdtSTOP"} );
 	ROOT::RDF::RSnapshotOptions optsDwnSnapshot;
 	optsDwnSnapshot.fMode = "UPDATE"; //to write the tree in the same file
-	RNode df_histDwn = *dtDwnDec.Snapshot("DeltaT DwnDecays", rootOut.c_str(), {"Dwndt", "DwndtErr", "DwnSTARTSquareMidPos", "DwnSTOPSquareMidPos", "DwnwdtSTART", "DwnwdtSTOP"}, optsDwnSnapshot );
-	cout<<"\nDATAFRAME CREATED IN FILE "<<rootOut.c_str()<<endl<<endl;
+	RNode df_histDwn = *dtDwnDec.Snapshot("DeltaT DwnDecays", OutFileName.c_str(), {"Dwndt", "DwndtErr", "DwnSTARTSquareMidPos", "DwnSTOPSquareMidPos", "DwnwdtSTART", "DwnwdtSTOP"}, optsDwnSnapshot );
+	cout<<"\nDATAFRAME CREATED IN FILE "<<OutFileName<<endl<<endl;
 	
 	return 0;
 }
