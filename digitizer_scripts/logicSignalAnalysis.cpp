@@ -13,6 +13,7 @@
 
 #include <ROOT/RDataFrame.hxx>
 #include <TString.h>
+#include <TPRegexp.h>
 
 typedef std::tuple<ROOT::VecOps::RVec<double>,ROOT::VecOps::RVec<double>,ROOT::VecOps::RVec<double>,ROOT::VecOps::RVec<double>> tuple4RVec_t;
 
@@ -101,11 +102,12 @@ int main(int argc, char** argv)
 	//try except syntax used to detect if idx and temporalized column have already been evaluated	
 	bool alreadyExecuted = false;
 	try{
-		//build an index to manage reshuffling on entries caused by MT and add timings to the amplitude points of waveforms for drawing
+		//build an index to manage reshuffling on entries caused by MT and attribute meas number with a trick using regex
 		df_wvf  .Define("idx","rdfentry_")
-			.Define("ch0_wvf_time"	, [sampfreq]( ROOT::VecOps::RVec<int> ADC_ch ){ return temporalize(ADC_ch, sampfreq); }, {"ch0_wvf_amp"} )
-			.Define("ch1_wvf_time"	, [sampfreq]( ROOT::VecOps::RVec<int> ADC_ch ){ return temporalize(ADC_ch, sampfreq); }, {"ch1_wvf_amp"} )
-			.Snapshot("amulet_wvf",rootOut.c_str(), {"idx","ch0_wvf_amp","ch0_wvf_time","ch1_wvf_amp","ch1_wvf_time"}, opt);
+			.Define("measN", [rootIn](){ auto myRegex=TPRegexp("[1-9][0-9]*|0"); return static_cast<short int>(std::stoi(((TString)rootIn)(myRegex,((TString)rootIn).Index("meas")))); })
+			.Define("ch0_wvf_time"	, [sampfreq]( ROOT::VecOps::RVec<int> ADC_ch ){ return temporalize(ADC_ch, sampfreq); }, {"ch0_wvf_amp"} ) //add time point to wvf ch0
+			.Define("ch1_wvf_time"	, [sampfreq]( ROOT::VecOps::RVec<int> ADC_ch ){ return temporalize(ADC_ch, sampfreq); }, {"ch1_wvf_amp"} ) //add time point to wvf ch1
+			.Snapshot("amulet_wvf",rootOut.c_str(), {"idx","measN","ch0_wvf_amp","ch0_wvf_time","ch1_wvf_amp","ch1_wvf_time"}, opt);
 		//open file and delete old tree then rename the existing one (needed to be able to execute this script multiple times)	
 		TFile myF(rootOut.c_str(),"UPDATE");
 		gDirectory->Delete("amulet;*");
@@ -119,7 +121,7 @@ int main(int argc, char** argv)
 		//so that later it can redefine columns already present in the friend tree
 		if( ((TString)e.what()).Contains("already present in TTree") ){
 			alreadyExecuted = true;
-			df_wvf.Snapshot("amulet_aux",rootOut.c_str(), {"idx","ch0_wvf_amp","ch0_wvf_time","ch1_wvf_amp","ch1_wvf_time"}, opt);
+			df_wvf.Snapshot("amulet_aux",rootOut.c_str(), {"idx","measN","ch0_wvf_amp","ch0_wvf_time","ch1_wvf_amp","ch1_wvf_time"}, opt);
 		}else
 			throw std::runtime_error(e.what());
 	}
