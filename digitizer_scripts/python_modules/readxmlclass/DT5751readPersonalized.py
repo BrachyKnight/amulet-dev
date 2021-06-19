@@ -1,6 +1,6 @@
 import os, errno 
+import gc
 from lxml import etree as ET
-from tqdm import tqdm as progressBar
 
 class DT5751reader(object):
     def __init__(self, filename):
