@@ -1,14 +1,14 @@
 #!/bin/bash
 
 RUN=${1?"insert run number as input"} 
-
+DAQERMFOLDER=${2?"insert path to folder containing xml files"}
 echo "Performing complete analysis on all the following files"
-for filename in ../DAQERM/run${RUN}meas*.xml; do
+for filename in ${DAQERMFOLDER}/run${RUN}meas*.xml; do
 	echo "$filename"
 	sleep 0.25
 done
 
-for filename in ../DAQERM/run${RUN}meas*.xml; do
+for filename in ${DAQERMFOLDER}/run${RUN}meas*.xml; do
 	./../digitizer_scripts/xmltoTTreeRDF ../DAQpreprocessed/ "$filename"
 done
 
