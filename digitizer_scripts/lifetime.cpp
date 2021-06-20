@@ -1,10 +1,9 @@
-/*
-Developed using ROOT 6.22/07 (guaranteed to work with version 6.22/07)
-COMPILE WITH:
-ON UBUNTU:
-c++ -Wall -o lifetime lifetime.cpp amulet.cc amulet.h `root-config --cflags --glibs`
-*/
-#include <TApplication.h>
+/* 
+ * Author: Massimo Girola
+ * Date: June 2021
+ * Developed using ROOT 6.24/00
+ * c++ -Wall -o lifetime lifetime.cpp `root-config --cflags --glibs`
+ */
 #include <iostream>
 #include <fstream>
 #include <string>
@@ -15,29 +14,12 @@ c++ -Wall -o lifetime lifetime.cpp amulet.cc amulet.h `root-config --cflags --gl
 #include <stdexcept>
 #include <chrono>
 
-
 #include <ROOT/RDataFrame.hxx>
 
-#include <TH1D.h>
-#include <TH2D.h>
-#include <TH3D.h>
-#include <TCanvas.h>
-#include <TGraphErrors.h>
-#include <TF1.h>
-#include <TStyle.h>
-#include <TPaveStats.h>
-#include <TCanvas.h>
-#include <TLegend.h>
-#include <TBrowser.h>
 #include <TMath.h>
-#include <TFitResultPtr.h>
-#include <TFitResult.h>
 #include <TString.h>
-#include <TObject.h>
-#include <TVirtualPad.h>
-#include <TSystem.h>
+#include <TSystem.h> //gInterpreter->Declare()
 #include <TChain.h>
-#include <TInterpreter.h>
 
 using ROOT::RDF::RNode;
 using ROOT::RDataFrame;
@@ -48,6 +30,7 @@ using std::cout;
 using std::endl;
 using std::string;
 
+//struct representing a square signal: falling edge and rising edge 
 typedef struct {
 	double sqFall, sqFallErr;
 	double sqRise, sqRiseErr;
@@ -55,6 +38,7 @@ typedef struct {
 	double sqWdtErr = TMath::Sqrt(sqFall*sqFall + sqRise*sqRise);
 } Square_Signal;
 
+//struct representing a decay event: two square signals start and stop
 typedef struct {
 	Square_Signal start;
 	Square_Signal stop;
@@ -64,8 +48,9 @@ typedef struct {
 	double dtRiseErr = TMath::Sqrt(stop.sqRiseErr*stop.sqRiseErr + start.sqRiseErr*start.sqRiseErr);
 } Decay_Event;
 
+//evaluate the decay events for UP decays
 Decay_Event GetSameChSquare( RVec<double> vFall, RVec<double> vFallErr, RVec<double> vRise, RVec<double> vRiseErr  ){
-	if (!(vFall.size() == 2 && vRise.size() == 2) ){ //exactly two signals in the same pulse	
+	if (!(vFall.size() == 2 && vRise.size() == 2 && vFallErr.size() == 2 && vRiseErr.size() == 2) ){ //exactly two signals in the same pulse	
 		cout<<"size of vector is "<<vRise.size()<<endl;  
 		throw std::runtime_error( "\n check filters, which signals should I choose?" ); 
 	}
@@ -77,17 +62,21 @@ Decay_Event GetSameChSquare( RVec<double> vFall, RVec<double> vFallErr, RVec<dou
 	return decay;
 }
 
+//evaluate the decay events for DOWN decays
 Decay_Event GetDiffChSquare(	RVec<double> v0Fall, RVec<double> v0FallErr,  RVec<double> v1Fall, RVec<double> v1FallErr,
 	       			RVec<double> v0Rise, RVec<double> v0RiseErr,  RVec<double> v1Rise, RVec<double> v1RiseErr ){
-	if (!( (v1Fall.size()==v0Fall.size()) && (v1Rise.size()==v0Rise.size()) && ( v1Rise.size() == 1 ) )){//exactly one signal in each pulse (one for each channel)
+	if (	!(  (v1Fall.size()   ==v0Fall.size()   ) && (v1Rise.size()   ==v0Rise.size()   )
+		&&  (v1FallErr.size()==v0FallErr.size()) && (v1RiseErr.size()==v0RiseErr.size()) 
+		&&  (v1Rise.size()   == 1 )            )
+	   ){   //exactly one signal in each pulse (one for each channel)
 		cout<<"size of vectors are "<<v0Fall.size()<<" and "<<v1Fall.size()<<endl;  
 		throw std::runtime_error( "\ncheck filters, which signals should I choose?" ); 
 	}
-	Square_Signal start{ v1Fall[0], v1FallErr[0], v1Rise[0], v1RiseErr[0] };
-	Square_Signal stop { v0Fall[1], v0FallErr[1], v0Rise[1], v0RiseErr[1] };
+	Square_Signal stop { v1Fall[0], v1FallErr[0], v1Rise[0], v1RiseErr[0] };
+	Square_Signal start{ v0Fall[0], v0FallErr[0], v0Rise[0], v0RiseErr[0] };
 	Decay_Event decay{ start, stop };
 	if (decay.dtFall < 2*abs(decay.dtRiseErr) || decay.dtRise < 2*abs(decay.dtFallErr))
-		throw std::runtime_error( "\n DeltaT<0 does not make any sense" ); //consecutive signals in the same pulse
+		cout<<"\n !!!!!!!WARNING!! DeltaT<0 IN DOWN DECAYS, MEANING???????"<<endl; //in principle it could since we are in two different chs, however I check it is compatible with the error
 	return decay;
 }
 
@@ -148,9 +137,9 @@ int main(int argc, char** argv)
 	string ch0NupNdwn = "(ch0Nup==ch0Ndwn)";
 	string ch1NupNdwn = "(ch1Nup==ch1Ndwn)";
 	string UpDecayCut = "(ch0Nup==2)";
-	string DwnDecayCut ="((ch0Nup==ch1Nup)==1)";
+	string DwnDecayCut ="((ch0Nup==ch1Nup) && (ch0Nup==1))";
 		
-	//define filters and print report
+	//apply cuts (filters) and print report
 	auto upDecays = d.Filter(ch0NupNdwn, "Ch0 Nup == Ndwn").Filter(UpDecayCut, "UpDecay (ch0Nup==2)");
 	auto dwnDecays =d.Filter(ch1NupNdwn, "Ch1 Nup == Ndwn").Filter(ch0NupNdwn, "Ch0 Nup == Ndwn").Filter(DwnDecayCut,"DwnDecay (ch0Nup==ch1Nup==1)");
 	upDecays.Report()->Print();
@@ -158,14 +147,16 @@ int main(int argc, char** argv)
 
 	//evaluate lifetimes from digital signals defining new columns in the dataframe
 	auto dtUpDec  = upDecays.Define("decayUP"   , GetSameChSquare, {"ch0timedwns","ch0timedwnsErr","ch0timeups","ch0timeupsErr" } );
-
 	auto dtDwnDec = dwnDecays.Define("decayDOWN", GetDiffChSquare, {"ch0timeups", "ch0timeupsErr", "ch1timeups", "ch1timeupsErr","ch0timedwns", "ch0timedwnsErr", "ch1timedwns", "ch1timedwnsErr"} );
 	
 	//save dataframes in external file
-	RNode df_histUp = *dtUpDec.Snapshot("DeltaT UpDecays", OutFileName.c_str(), {"measN","idx","decayUP"} );
+	RNode df_histUp = *dtUpDec.Snapshot("UpDecays", OutFileName.c_str(), {"measN","idx","decayUP"} );
 	ROOT::RDF::RSnapshotOptions optsDwnSnapshot;
 	optsDwnSnapshot.fMode = "UPDATE"; //to write the tree in the same file
-	RNode df_histDwn = *dtDwnDec.Snapshot("DeltaT DwnDecays", OutFileName.c_str(), {"measN","idx","decayDOWN"},  optsDwnSnapshot );
+	RNode df_histDwn = *dtDwnDec.Snapshot("DwnDecays", OutFileName.c_str(), {"measN","idx","decayDOWN"},  optsDwnSnapshot );
+
+
+
 	cout<<"\nDATAFRAME CREATED IN FILE "<<OutFileName<<endl<<endl;
 	
 	return 0;
