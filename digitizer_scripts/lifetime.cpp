@@ -154,8 +154,16 @@ int main(int argc, char** argv)
 	ROOT::RDF::RSnapshotOptions optsDwnSnapshot;
 	optsDwnSnapshot.fMode = "UPDATE"; //to write the tree in the same file
 	RNode df_histDwn = *dtDwnDec.Snapshot("DwnDecays", OutFileName.c_str(), {"measN","idx","decayDOWN"},  optsDwnSnapshot );
-
-
+	
+	//use BuildIndex to make DwnDecays a friend of UpDecays
+	TFile f(OutFileName.c_str(),"UPDATE");
+	auto *tmain = f.Get<TTree>("UpDecays");
+	auto *tfriend = f.Get<TTree>("DwnDecays");
+	tfriend->BuildIndex("idx","measN");
+	tfriend->Write("",TObject::kOverwrite);
+	tmain->AddFriend(tfriend);
+	tmain->Write("",TObject::kOverwrite);
+	f.Close();
 
 	cout<<"\nDATAFRAME CREATED IN FILE "<<OutFileName<<endl<<endl;
 	
