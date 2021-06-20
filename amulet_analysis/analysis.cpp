@@ -50,7 +50,7 @@ typedef RVec<double> rvecdouble_t;
 
 void CompleteAnalysis( amulet* amu, string rootOut, string outDir, bool stabilityAnalysis  ){
 	
-	amu->SnapshotAssociatedDataFramesInRootFile();
+	//amu->SnapshotAssociatedDataFramesInRootFile();
 	
 	//names
 	string rootOutName = rootOut;
@@ -109,7 +109,7 @@ void CompleteAnalysis( amulet* amu, string rootOut, string outDir, bool stabilit
 		std::copy(init.begin(), init.end(), fitLimits);
 	}else if(((TString)rootOutName).Contains("run9")){
                 cout<<endl<<"RUN9 campo magnetico spento"<<endl;
-		int nBinsHistoDecay = 30;
+		int nBinsHistoDecay = 40;
 		auto init = std::initializer_list<double>({CFDSignalsWidth*(1+0.7), (StartSignalWidth+CFDSignalsWidth)*(1-0.05), (double)nBinsHistoDecay});
 		std::copy(init.begin(), init.end(), fitLimits);
 	}else{
@@ -118,9 +118,9 @@ void CompleteAnalysis( amulet* amu, string rootOut, string outDir, bool stabilit
 	}
 	
 	amu->Perform_Lifetime_Fit(fitLimits, names, true, "RSE");
-	
+/*	
 	//--------------------------------SIGNAL WIDTH and START and STOP signal analysis-----------------------------------------
-	bool STARTandSTOP_SignalsAnalysis = true;
+	bool STARTandSTOP_SignalsAnalysis = false;
 	if(STARTandSTOP_SignalsAnalysis){
 		//--- SIGNAL WIDTH analysis ---
 		int nBinsSTARTWidth = 2000;
@@ -209,7 +209,7 @@ void CompleteAnalysis( amulet* amu, string rootOut, string outDir, bool stabilit
 			auto mean_duration_per_iteration = std::chrono::duration_cast<std::chrono::milliseconds>( t2 - t1 ).count()/(N_iterationsBin*N_iterationsLowerLimit*N_iterationsUpperLimit);
 			std::cout<<"3D N_iters = "<<N_iterationsBin*N_iterationsLowerLimit*N_iterationsUpperLimit<<" completed in in "<<duration<<" minutes"<<endl<<"needed mean of "<<mean_duration_per_iteration<<" ms/iteration"<<endl<<endl;
 		}
-	}
+	}*/
 }
 
 int main(int argc, char** argv)
@@ -232,8 +232,8 @@ int main(int argc, char** argv)
 
 	//open file and create RDataFrame
 	//ROOT::EnableImplicitMT();
-	ROOT::RDataFrame df_histUp("DeltaT UpDecays", rootIn.c_str());
-	ROOT::RDataFrame df_histDwn("DeltaT DwnDecays", rootIn.c_str());
+	ROOT::RDataFrame df_histUp("UpDecays", rootIn.c_str());
+	ROOT::RDataFrame df_histDwn("DwnDecays", rootIn.c_str());
 
 	#ifdef ROOT_ANALYSIS
 	//SET ROOT ENVIRONMENT
@@ -297,7 +297,7 @@ int main(int argc, char** argv)
 	CompleteAnalysis(amu, rootOut, outDir, true);
 
 
-
+/*
 	//-------------------New Signal-Width-Based Filters (F2)-----------------------
 	//define cuts
 	bool signalWidthBasedFilters = false;
@@ -326,7 +326,7 @@ int main(int argc, char** argv)
 			delete amuFiltered;
 		}
 	}
-
+*/
 	delete amu;
 	if (!setRootBatchMode) myApp->Run();
 	#endif
