@@ -1,7 +1,7 @@
 <!-- ABOUT THE PROJECT -->
 ## About The Project
 
-# amulet
+# AMULET
 AMULET (Analysis MUon LifETime) consists in a series of C++ and python scripts written to analyze data relative to the life-times of cosmic muons.
 The project has two main parts:
 * Reading data taken with a caen digitizer (CAEN DT5751). This is the most important part and it is actually the main focus of this project.
