@@ -350,8 +350,8 @@ nestedVecWithName_t amulet::Perform_Lifetime_Fit(double* fitLims,  vector<string
 	const bool comb = (names.size() == 6);
 	const char* combinedDecayName = (comb) ? names[5].c_str() : "NoComb";
 
-        auto histUpDecay  = _dfUp.Histo1D<double>({UpDecayName, UpDecayName, nBins, lowerLimit*(0.5), upperLimit*(1+0.25)}, "Updt"); //TODO here upper limit changes with function range, probably wrong when performin stability analysis
-        auto histDwnDecay = _dfDwn.Histo1D<double>({DwnDecayName, DwnDecayName, nBins, lowerLimit*(0.5), upperLimit*(1+0.25)}, "Dwndt");
+        auto histUpDecay  = _dfUp.Histo1D<double>({UpDecayName, UpDecayName, nBins, lowerLimit*(0.5), upperLimit*(1+0.25)}, "decayUP.dtFall"); //TODO here upper limit changes with function range, probably wrong when performin stability analysis
+        auto histDwnDecay = _dfDwn.Histo1D<double>({DwnDecayName, DwnDecayName, nBins, lowerLimit*(0.5), upperLimit*(1+0.25)}, "decayDOWN.dtFall");
 
 	vector<TList*> histoDrawLists;
 	
