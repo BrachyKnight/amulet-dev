@@ -10,6 +10,7 @@
 #include <string>
 #include <vector>
 #include <chrono>
+#include <filesystem>
 
 #include <ROOT/RDataFrame.hxx>
 #include <TString.h>
@@ -55,7 +56,7 @@ tuple4RVec_t analyze ( ROOT::VecOps::RVec<int> v, double sampfreq )
 	for( unsigned int i = 0; i<timedwns.size(); i++ )
 	{
 		auto dwnstCE = Center_and_Err(timedwns[i]);
-		tdwn_center.push_back( dwnstCE.first ), tup_cerr.push_back( dwnstCE.second );
+		tdwn_center.push_back( dwnstCE.first ), tdwn_cerr.push_back( dwnstCE.second );
 	}
 	for( unsigned int i = 0; i<timeups.size(); i++ )
 	{
@@ -77,18 +78,18 @@ int main(int argc, char** argv)
 	double sampfreq = 1e9; //SET THE SAMPLE FREQUENCY OF YOUR DIGITIZER TO GET CORRECT RESULTS
 	
 	auto t0 = std::chrono::high_resolution_clock::now(); //to evaluate execution time
-	if ( argc != 3 ){
+	if ( argc != 2 ){
 		std::cout<<"\nINPUT ERROR"<<endl
 		<<"needs:\noutputDir \nrootInputFile\n"<<endl
-		<<"as an example \n./executable path/to/output/folder/ path/to/file/fileName.root"<<endl;
+		<<"as an example \n./executable path/to/file/fileName.root"<<endl;
 		return 1;
 	}
   
 	//set I/O file names
-	string 	outDir  = argv[1],
-		rootIn  = argv[2],
-		rootOut = rootIn; //update existing TTree with new branches (columns)
-	
+	string	rootIn  = argv[1],
+		rootOut = rootIn, //update existing TTree with new branches (columns)
+		outDir = filesystem::path(rootIn).parent_path().u8string(); //c++17 way to extract path from filename
+
 	//use all cores of your machine MultiThreading to speed up analysis (read RDataFrame documentation for MT warnings)
 	ROOT::EnableImplicitMT();
 	

@@ -96,7 +96,7 @@ int main(int argc, char** argv)
 	//set names from input line
 	if ( !(argc >= 4) ){ 
 		std::cout<<"\nINPUT ERROR"<<endl
-		<<"needs:\n./path/to/executable/ path/to/output/directory/ \npath/to/root/input/files/directory/"
+		<<"needs:\n./path/to/executable/ path/to/output/directory/ \npath/to/root/input/files/directory/"<<endl
 		<<"RUNnumber MEASnumbers (dont specify for all)"<<endl
 		<<"examples: (for saving output into ../DAQprocessed/ and taking data from ../DAQpreproccesed/"
 		<<"./executable ../DAQprocessed/ ../DAQpreproccesed/ 1 2 //for run1meas2"<<endl
