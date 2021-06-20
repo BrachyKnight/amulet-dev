@@ -55,7 +55,7 @@ After having downloaded the project and compiled all the C++ script using the li
     - you can open the file with a TBrowser and plot your distributions, there will be a lot of them but I'm sure you can figure out what they are :wink:
 5. Now you can start your analysis of muon lifetime!! you can use the scripts in the folder amulet_analysis/ but they are quite buggy and they are strictly related to my set of data, so it is meant to be more like an example.
 
-**_contact me for any question, I will more than happy to explain more in detail how the code works_**
+**_Contact me for any question, I will be more than happy to explain more in detail how the code works_**
 
 <!-- CONTRIBUTING -->
 ## Contributing
