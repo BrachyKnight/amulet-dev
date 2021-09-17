@@ -2,7 +2,7 @@
 Developed using ROOT 6.22/07 (guaranteed to work with version 6.22/07)
 COMPILE WITH:
 ON UBUNTU:
-c++ -Wall -o lifetimev2 lifetimev2.cpp amulet.cc amulet.h `root-config --cflags --glibs`
+c++ -Wall -o analysis analysis.cpp amulet.cc amulet.h `root-config --cflags --glibs`
 */
 #include <TApplication.h>
 #include <iostream>
@@ -69,7 +69,7 @@ void CompleteAnalysis( amulet* amu, string rootOut, string outDir, bool stabilit
 	double fitLimits[3];
 	if(((TString)rootOutName).Contains("run1")){
 		cout<<endl<<"RUN1: nessun materiale"<<endl;
-		int nBinsHistoDecay = 300;//216; //60; //213;
+		int nBinsHistoDecay = 150;//216; //60; //213;
 		auto init = std::initializer_list<double>({CFDSignalsWidth*(1+0.7), (StartSignalWidth+CFDSignalsWidth)*(1-0.05), (double)nBinsHistoDecay});
 		std::copy(init.begin(), init.end(), fitLimits);
 	}else if(((TString)rootOutName).Contains("run2")){
@@ -257,6 +257,8 @@ int main(int argc, char** argv)
 	//string myFormula = "(exp(-x/[#tau])+[b])/([#tau]*(exp(-[lowerLimit]/[#tau])-exp(-[upperLimit]/[#tau]))-[lowerLimit]*[b]+[upperLimit]*[b])";//caso base normalizzato
 	//CASO BASIC SOLO FONDO
 	//string myFormula = "[B]";
+	//CASO MUON RATIO ROBERTO
+	//string myFormula = "[N]*((exp(-x/[2.193e-06])/[2.193e-06])*(1+[f])+[0.6122]*(exp(-x/[0.864e-06])/[0.864e-06] - exp(-x/[2.193e-06])/[2.193e-06])) + [B]";
 
 	//CASO DUE MATERIALI DIVERSI CON RAPPORTO
 	bool DoNormalize = false;

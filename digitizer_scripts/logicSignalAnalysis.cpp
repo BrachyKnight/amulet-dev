@@ -15,10 +15,11 @@
 #include <ROOT/RDataFrame.hxx>
 #include <TString.h>
 #include <TPRegexp.h>
+//STL usage
+using std::cout, std::endl, std::make_pair, std::string, std::make_tuple, std::get, std::runtime_error;
 
+//define custom type
 typedef std::tuple<ROOT::VecOps::RVec<double>,ROOT::VecOps::RVec<double>,ROOT::VecOps::RVec<double>,ROOT::VecOps::RVec<double>> tuple4RVec_t;
-
-using namespace std;
 
 std::pair<double,double> Center_and_Err( ROOT::VecOps::RVec<double> vec)
 {
@@ -28,7 +29,12 @@ std::pair<double,double> Center_and_Err( ROOT::VecOps::RVec<double> vec)
 tuple4RVec_t analyze ( ROOT::VecOps::RVec<int> v, double sampfreq ) 
 {
 	unsigned int nPts = v.size();
-	double vminTh = 0.2*Max(v), vmaxTh = 0.7*Max(v);  //is considered only if between 20 and 70 percent of height
+	if( nPts == 0 ){ //if the channel is empty simply return vectors with 0
+		ROOT::VecOps::RVec<double> nullvec = {0};
+		return make_tuple(nullvec,nullvec,nullvec,nullvec);
+	}
+	double deltaV = abs(Max(v)-Min(v));
+	double vminTh = 0.2*deltaV+Min(v), vmaxTh = 0.7*deltaV+Min(v);  //is considered only if between 20 and 70 percent of height
 	ROOT::VecOps::RVec<ROOT::VecOps::RVec<double>> ups, dwns, timeups, timedwns;
 	for( unsigned int i = 0; i<nPts; i++ )
 	{
@@ -43,14 +49,24 @@ tuple4RVec_t analyze ( ROOT::VecOps::RVec<int> v, double sampfreq )
 			j++;
 			i = j;
 		}
-		if( (auxv.size() == auxt.size()) && auxt.size()!=0 )
+		if( (auxv.size() == auxt.size()) && auxt.size()!=0 ) //cases where at least one point falls between the min threshold and the max threshold
 		{
 			if(auxv[0]>auxv[auxv.size()-1]) //check if first point is greater then last point (means wvf goes down)
 				timedwns.push_back(auxt);
 			else if (auxv[0]<auxv[auxv.size()-1])  //check if first point is less then last point (means wvf goes up)
 				timeups.push_back(auxt);			
 			else cout<<"error analyze"<<endl;
-		}//TODO add a check to find the ones that jumps from under threshold to above threshold and therefore are not saved		
+		}else if( (auxv.size() == auxt.size()) && auxt.size()==0 ){ //cases where signals jump straight from under min threshold to over max threshold
+			if( i == 0 || i == v.size()-1) continue;
+			if( v[i-1] < vminTh && v[i] < v[i+1] && v[i]>vmaxTh){ //jump from over max threshold value to under min threshold value
+				auxt.push_back(static_cast<double>(i)/sampfreq);
+				timeups.push_back(auxt);
+			}else if( v[i-1] > vmaxTh && v[i] > v[i+1] && v[i]<vminTh ){ //jump from under min threshold value to over max threshold value
+				auxt.push_back(static_cast<double>(i)/sampfreq);
+				timedwns.push_back(auxt);
+			}
+		}else
+			throw runtime_error("error in analyze() function");		
 	}
 	ROOT::VecOps::RVec<double> tup_center, tdwn_center, tup_cerr, tdwn_cerr; 
 	for( unsigned int i = 0; i<timedwns.size(); i++ )
@@ -76,6 +92,7 @@ ROOT::VecOps::RVec<float> temporalize (ROOT::VecOps::RVec<int> ADC_ch, double sa
 int main(int argc, char** argv)
 {
 	double sampfreq = 1e9; //SET THE SAMPLE FREQUENCY OF YOUR DIGITIZER TO GET CORRECT RESULTS
+	cout<<endl<<"ASSUMING DIGITIZER SAMPLE FREQUENCY EQUAL TO "<<sampfreq<<" Hz"<<endl;
 	
 	auto t0 = std::chrono::high_resolution_clock::now(); //to evaluate execution time
 	if ( argc != 2 ){
@@ -88,7 +105,7 @@ int main(int argc, char** argv)
 	//set I/O file names
 	string	rootIn  = argv[1],
 		rootOut = rootIn, //update existing TTree with new branches (columns)
-		outDir = filesystem::path(rootIn).parent_path().u8string(); //c++17 way to extract path from filename
+		outDir = std::filesystem::path(rootIn).parent_path().u8string(); //c++17 way to extract path from filename
 
 	//use all cores of your machine MultiThreading to speed up analysis (read RDataFrame documentation for MT warnings)
 	ROOT::EnableImplicitMT();

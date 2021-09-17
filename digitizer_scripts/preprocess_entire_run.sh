@@ -16,5 +16,3 @@ for filename in ../DAQpreprocessed/run${RUN}meas*_amulet.root; do
 	./../digitizer_scripts/logicSignalAnalysis "$filename"
 done
 
-#hadd -f ../DAQpreprocessed/run${RUN}_allmeas_amulet.root ../DAQpreprocessed/run${RUN}meas*_amulet.root
-

@@ -205,6 +205,9 @@ vecWithName_t amulet::partialFit(T histo, const double fitRange[2],  string name
 			fitFunc = fixParametersForNormilized(fitFunc, lowerLimit, upperLimit);
 		}else if(_function =="[B]"){
 			fitFunc->SetParameter(0,histo->GetBinContent(histo->FindBin(35e-6)));
+		}else if(fitFunc->GetNpar() == 6)/* && ((TString)_function).BeginsWith("([f]*exp(-x/") && ((TString)_function).Contains(")/(-[lowerLimit]*") && ((TString)_function).Contains("]))*[f]*[") && ((TString)_function).EndsWith("])"))*/{
+			fitFunc->SetParameters(2.197e-6, histo->GetBinContent(histo->FindBin(upperLimit))/(histo->Integral(histo->FindBin(lowerLimit), histo->FindBin(upperLimit))));
+			fitFunc = fixParametersForNormilized(fitFunc, lowerLimit, upperLimit);
 		}else
 			throw std::runtime_error(((string)("Have you enabled/disabled _DoNormalize??????\nCASE NOT IMPLEMENTED, CHECK YOUR FUNCTION\nnPars="+std::to_string(fitFunc->GetNpar())+"\nformula="+fitFunc->GetExpFormula()+"\n it must be a string exactly equal to what expected!!!!")).c_str());
 	}

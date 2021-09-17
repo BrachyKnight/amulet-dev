@@ -2,7 +2,7 @@
  * Author: Massimo Girola
  * Date: June 2021
  * Developed using ROOT 6.24/00
- * c++ -Wall -o logicSignalAnalysis logicSignalAnalysis.cpp `root-config --cflags --glibs`
+ * c++ -Wall -o xmltoTTreeRDF xmltoTTreeRDF.cpp `root-config --cflags --glibs`
  */
  
 #include <iostream>
@@ -59,7 +59,9 @@ int main(int argc, char** argv)
 	       	txtOut      = xmlIn  ,
 		rootOut     = xmlIn  ,
 		txtOutName  = txtOut.substr(txtOut.find_last_of("/")+1),
-	rootOutName = rootOut.substr(rootOut.find_last_of("/")+1);
+		rootOutName = rootOut.substr(rootOut.find_last_of("/")+1);
+	if( outDir.begin() + outDir.find_last_of("/") != outDir.end() )
+		outDir += "/";	
 	txtOut      = outDir + txtOutName ;
 	txtOut.replace(txtOut.end()-4, txtOut.end(), ".txt"); 
 	rootOut     = outDir + rootOutName;
