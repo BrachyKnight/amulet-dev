@@ -141,7 +141,9 @@ int main(int argc, char** argv)
 	df_wvf	.Define("allChannels", getWVFs   ) //get list of lists containing ALL the four digitizer channels (even empty ones, then you decide wich to keep)
 		.Define("ch0_wvf_amp",[=](ROOT::VecOps::RVec<ROOT::VecOps::RVec<int>> allChs){ return allChs[0]; }, {"allChannels"} ) //get channel 0
 		.Define("ch1_wvf_amp",[=](ROOT::VecOps::RVec<ROOT::VecOps::RVec<int>> allChs){ return allChs[1]; }, {"allChannels"} ) //get channel 1
-		.Snapshot("amulet"   , rootOut.c_str(), {"ch0_wvf_amp","ch1_wvf_amp"}, opt); //save TTree in external file
+		.Define("ch2_wvf_amp",[=](ROOT::VecOps::RVec<ROOT::VecOps::RVec<int>> allChs){ return allChs[2]; }, {"allChannels"} ) //get channel 0
+		.Define("ch3_wvf_amp",[=](ROOT::VecOps::RVec<ROOT::VecOps::RVec<int>> allChs){ return allChs[3]; }, {"allChannels"} ) //get channel 1
+		.Snapshot("amulet"   , rootOut.c_str(), {"ch0_wvf_amp","ch1_wvf_amp","ch2_wvf_amp","ch3_wvf_amp"}, opt); //save TTree in external file
 	auto t2 = std::chrono::high_resolution_clock::now();
 	auto duration = std::chrono::duration_cast<std::chrono::minutes>( t2 - t1 ).count();
 	std::cout<<"Snapshot has been saved in "<<rootOut.c_str()<<endl
