@@ -130,18 +130,40 @@ int main(int argc, char** argv)
 	//(read RDataFrame documentation for MT warnings)
 	ROOT::EnableImplicitMT();
 	
-	//create df
-	ROOT::RDataFrame d(myChain);
-
 	//define cuts
-	string ch0NupNdwn = "(ch0Nup==ch0Ndwn)";
-	string ch1NupNdwn = "(ch1Nup==ch1Ndwn)";
-	string UpDecayCut = "(ch0Nup==2)";
-	string DwnDecayCut ="((ch0Nup==ch1Nup) && (ch0Nup==1))";
+	auto EvaluateDecayTopology = [](int ch0Nup, int ch0Ndwn, int ch1Nup, int ch1Ndwn)->short int{
+		bool ch0Ncheck = (ch0Nup == ch0Ndwn);
+		bool ch1Ncheck = (ch1Nup == ch1Ndwn);
+		bool upDecay = (ch0Nup == 2);
+		bool dwnDecay = (ch0Nup==ch1Nup && ch0Nup==1);
+		if( upDecay && ch0Ncheck) //up decay topology
+			return 1;
+		else if( dwnDecay && ch0Ncheck && ch1Ncheck) //down decay topology
+			return -1;
+		else if( upDecay && !ch0Ncheck ) //up decay topology cut relaxed
+			return 2;
+		else if( dwnDecay && !(ch0Ncheck && ch1Ncheck)) //down decay topology relaxed
+			return -2;
+		else if( !ch0Ncheck )
+			return 100;
+		else if( !ch1Ncheck )
+			return 110;
+		else return 0;
+	};
+	
+	//create df
+	ROOT::RDataFrame df(myChain);
+	
+	auto d = df.Define("topology", EvaluateDecayTopology, {"ch0Nup","ch0Ndwn","ch1Nup","ch1Ndwn"});
 		
 	//apply cuts (filters) and print report
-	auto upDecays = d.Filter(ch0NupNdwn, "Ch0 Nup == Ndwn").Filter(UpDecayCut, "UpDecay (ch0Nup==2)");
-	auto dwnDecays =d.Filter(ch1NupNdwn, "Ch1 Nup == Ndwn").Filter(ch0NupNdwn, "Ch0 Nup == Ndwn").Filter(DwnDecayCut,"DwnDecay (ch0Nup==ch1Nup==1)");
+	auto rejected = d.Filter("abs(topology) != 1", "rejected");
+	auto accepted = d.Filter("abs(topology) == 1", "accepted");
+	auto upDecays = accepted.Filter("topology == 1", "up decay");
+	auto dwnDecays =accepted.Filter("topology == -1", "dwn decay");
+	accepted.Report()->Print();
+	rejected.Report()->Print();
+	cout<<endl;
 	upDecays.Report()->Print();
 	dwnDecays.Report()->Print();
 
@@ -150,14 +172,16 @@ int main(int argc, char** argv)
 	auto dtDwnDec = dwnDecays.Define("decayDOWN", GetDiffChSquare, {"ch0timeups", "ch0timeupsErr", "ch1timeups", "ch1timeupsErr","ch0timedwns", "ch0timedwnsErr", "ch1timedwns", "ch1timedwnsErr"} );
 	
 	//save dataframes in external file
-	RNode df_histUp = *dtUpDec.Snapshot("UpDecays", OutFileName.c_str(), {"measN","idx","decayUP"} );
-	ROOT::RDF::RSnapshotOptions optsDwnSnapshot;
-	optsDwnSnapshot.fMode = "UPDATE"; //to write the tree in the same file
-	RNode df_histDwn = *dtDwnDec.Snapshot("DwnDecays", OutFileName.c_str(), {"measN","idx","decayDOWN"},  optsDwnSnapshot );
+	accepted.Snapshot("Decays", OutFileName.c_str(),{"measN","idx","topology","ch0Nup","ch0Ndwn","ch1Nup","ch1Ndwn"});
+	ROOT::RDF::RSnapshotOptions optsSnapshot;
+	optsSnapshot.fMode = "UPDATE"; //to write the tree in the same file
+	dtDwnDec.Snapshot("DwnDecays", OutFileName.c_str(), {"measN","idx","decayDOWN"},  optsSnapshot );
+	dtUpDec.Snapshot("UpDecays", OutFileName.c_str(), {"measN","idx","decayUP"}, optsSnapshot );
+	rejected.Snapshot("Rejected", OutFileName.c_str(), {"measN","idx","topology","ch0Nup","ch0Ndwn","ch1Nup","ch1Ndwn","ch0_wvf_time","ch0_wvf_amp","ch1_wvf_time","ch1_wvf_amp"}, optsSnapshot);
 	
-	//use BuildIndex to make DwnDecays a friend of UpDecays
+	//use BuildIndex to make DwnDecays a friend of Decay
 	TFile f(OutFileName.c_str(),"UPDATE");
-	auto *tmain = f.Get<TTree>("UpDecays");
+	auto *tmain = f.Get<TTree>("Decays");
 	auto *tfriend = f.Get<TTree>("DwnDecays");
 	tfriend->BuildIndex("idx","measN");
 	tfriend->Write("",TObject::kOverwrite);
@@ -165,6 +189,26 @@ int main(int argc, char** argv)
 	tmain->Write("",TObject::kOverwrite);
 	f.Close();
 
+	//use BuildIndex to make UpDecays a friend of Decay
+	TFile f1(OutFileName.c_str(),"UPDATE");
+	auto *tmain1 = f1.Get<TTree>("Decays");
+	auto *tfriend1 = f1.Get<TTree>("UpDecays");
+	tfriend1->BuildIndex("idx","measN");
+	tfriend1->Write("",TObject::kOverwrite);
+	tmain1->AddFriend(tfriend1);
+	tmain1->Write("",TObject::kOverwrite);
+	f1.Close();
+	
+	//use BuildIndex to make UpDecays a friend of Decay
+	TFile f2(OutFileName.c_str(),"UPDATE");
+	auto *tmain2 = f2.Get<TTree>("Decays");
+	auto *tfriend2 = f2.Get<TTree>("Rejected");
+	tfriend2->BuildIndex("idx","measN");
+	tfriend2->Write("",TObject::kOverwrite);
+	tmain2->AddFriend(tfriend1);
+	tmain2->Write("",TObject::kOverwrite);
+	f2.Close();
+	
 	cout<<"\nDATAFRAME CREATED IN FILE "<<OutFileName<<endl<<endl;
 	
 	return 0;
