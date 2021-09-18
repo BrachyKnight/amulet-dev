@@ -175,9 +175,12 @@ int main(int argc, char** argv)
 	accepted.Snapshot("Decays", OutFileName.c_str(),{"measN","idx","topology","ch0Nup","ch0Ndwn","ch1Nup","ch1Ndwn"});
 	ROOT::RDF::RSnapshotOptions optsSnapshot;
 	optsSnapshot.fMode = "UPDATE"; //to write the tree in the same file
-	dtDwnDec.Snapshot("DwnDecays", OutFileName.c_str(), {"measN","idx","decayDOWN"},  optsSnapshot );
-	dtUpDec.Snapshot("UpDecays", OutFileName.c_str(), {"measN","idx","decayUP"}, optsSnapshot );
-	rejected.Snapshot("Rejected", OutFileName.c_str(), {"measN","idx","topology","ch0Nup","ch0Ndwn","ch1Nup","ch1Ndwn","ch0_wvf_time","ch0_wvf_amp","ch1_wvf_time","ch1_wvf_amp"}, optsSnapshot);
+	dtDwnDec.Snapshot("DwnDecays", OutFileName.c_str(),   {	"measN","idx","decayDOWN"	}, optsSnapshot );
+	dtUpDec.Snapshot ( "UpDecays", OutFileName.c_str(),   {	"measN","idx","decayUP"		}, optsSnapshot );
+	rejected.Snapshot("Rejected" , OutFileName.c_str(),   {	"measN","idx","topology","ch0Nup",
+								"ch0Ndwn","ch1Nup","ch1Ndwn",
+								"ch0_wvf_time","ch0_wvf_amp",
+								"ch1_wvf_time","ch1_wvf_amp"	}, optsSnapshot ); //for the rejected save also the wvf so you can examine what went wrong
 	
 	//use BuildIndex to make DwnDecays a friend of Decay
 	TFile f(OutFileName.c_str(),"UPDATE");
@@ -199,13 +202,13 @@ int main(int argc, char** argv)
 	tmain1->Write("",TObject::kOverwrite);
 	f1.Close();
 	
-	//use BuildIndex to make UpDecays a friend of Decay
+	//use BuildIndex to make Rejected a friend of Decay
 	TFile f2(OutFileName.c_str(),"UPDATE");
 	auto *tmain2 = f2.Get<TTree>("Decays");
 	auto *tfriend2 = f2.Get<TTree>("Rejected");
 	tfriend2->BuildIndex("idx","measN");
 	tfriend2->Write("",TObject::kOverwrite);
-	tmain2->AddFriend(tfriend1);
+	tmain2->AddFriend(tfriend2);
 	tmain2->Write("",TObject::kOverwrite);
 	f2.Close();
 	
