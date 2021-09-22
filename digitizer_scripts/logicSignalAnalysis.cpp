@@ -26,7 +26,7 @@ std::pair<double,double> Center_and_Err( ROOT::VecOps::RVec<double> vec)
 	return make_pair(Min(vec) + (Max(vec)-Min(vec))/2., (Max(vec)-Min(vec))/2.);
 }
 
-tuple4RVec_t analyze ( ROOT::VecOps::RVec<int> v, double sampfreq ) 
+tuple4RVec_t analyze ( ROOT::VecOps::RVec<int> v, double sampfreq, double minTh, double maxTh ) 
 {
 	unsigned int nPts = v.size();
 	if( nPts == 0 ){ //if the channel is empty simply return vectors with 0
@@ -34,7 +34,7 @@ tuple4RVec_t analyze ( ROOT::VecOps::RVec<int> v, double sampfreq )
 		return make_tuple(nullvec,nullvec,nullvec,nullvec);
 	}
 	double deltaV = abs(Max(v)-Min(v));
-	double vminTh = 0.2*deltaV+Min(v), vmaxTh = 0.7*deltaV+Min(v);  //is considered only if between 20 and 70 percent of height
+	double vminTh = minTh*deltaV+Min(v), vmaxTh = maxTh*deltaV+Min(v);  //is considered only if between minTh and maxTh percent of pulse amplitude
 	ROOT::VecOps::RVec<ROOT::VecOps::RVec<double>> ups, dwns, timeups, timedwns;
 	for( unsigned int i = 0; i<nPts; i++ )
 	{
@@ -95,12 +95,24 @@ int main(int argc, char** argv)
 	cout<<endl<<"ASSUMING DIGITIZER SAMPLE FREQUENCY EQUAL TO "<<sampfreq<<" Hz"<<endl;
 	
 	auto t0 = std::chrono::high_resolution_clock::now(); //to evaluate execution time
-	if ( argc != 2 ){
-		std::cout<<"\nINPUT ERROR"<<endl
+	if ( argc != 2 && argc != 4 ){
+		std::cout<<"\nINPUT ERROR: argc = "<<argc<<endl
 		<<"needs:\noutputDir \nrootInputFile\n"<<endl
-		<<"as an example \n./executable path/to/file/fileName.root"<<endl;
+		<<"optional arguments threshold values"<<endl
+		<<"as an example \n./executable path/to/file/fileName.root minTh(optional) maxTh(optional)"<<endl;
 		return 1;
 	}
+	double minTh=25, maxTh=75;
+	bool ThOptimization = false;
+	if ( argc == 4 ){
+		minTh = std::stod(argv[2]);
+		maxTh = std::stod(argv[3]);
+		ThOptimization = true;
+	}
+	if(!(minTh<=100 && maxTh<=100 && minTh>=0 && maxTh>=0 && minTh<=maxTh))
+		throw std::runtime_error("THRESHOLD VALUES ARE \% OF PULSE AMPLITUDE SO THEY MUST BE IN RANGE [0,100]");
+	minTh/=100; maxTh/=100;
+	cout<<"Using threshold values: \n minTh = "<<minTh<<" maxTh = "<<maxTh<<endl;
   
 	//set I/O file names
 	string	rootIn  = argv[1],
@@ -139,7 +151,10 @@ int main(int argc, char** argv)
 		//so that later it can redefine columns already present in the friend tree
 		if( ((TString)e.what()).Contains("already present in TTree") ){
 			alreadyExecuted = true;
-			df_wvf.Snapshot("amulet_aux",rootOut.c_str(), {"idx","measN","ch0_wvf_amp","ch0_wvf_time","ch1_wvf_amp","ch1_wvf_time"}, opt);
+			if(ThOptimization)
+				df_wvf.Snapshot("amulet_aux",rootOut.c_str(), {"idx","measN","ch0_wvf_amp","ch1_wvf_amp"}, opt);
+			else
+				df_wvf.Snapshot("amulet_aux",rootOut.c_str(), {"idx","measN","ch0_wvf_amp","ch0_wvf_time","ch1_wvf_amp","ch1_wvf_time"}, opt);
 		}else
 			throw std::runtime_error(e.what());
 	}
@@ -148,8 +163,8 @@ int main(int argc, char** argv)
 	const char* name = (alreadyExecuted) ? "amulet_aux" : "amulet";
 	ROOT::RDataFrame df_dec(name, rootIn);
 	//define new columns with the decoded informations and create new tree
-	df_dec	.Define("ch0Decoded"    , [sampfreq]( ROOT::VecOps::RVec<int> ADC_ch ){ return analyze(ADC_ch, sampfreq);     }, {"ch0_wvf_amp"} )
-		.Define("ch1Decoded"    , [sampfreq]( ROOT::VecOps::RVec<int> ADC_ch ){ return analyze(ADC_ch, sampfreq);     }, {"ch1_wvf_amp"} )
+	df_dec	.Define("ch0Decoded"    , [sampfreq,minTh,maxTh]( ROOT::VecOps::RVec<int> ADC_ch ){ return analyze(ADC_ch, sampfreq, minTh, maxTh);     }, {"ch0_wvf_amp"} )
+		.Define("ch1Decoded"    , [sampfreq,minTh,maxTh]( ROOT::VecOps::RVec<int> ADC_ch ){ return analyze(ADC_ch, sampfreq, minTh, maxTh);     }, {"ch1_wvf_amp"} )
 		.Define("ch0Nup"        , []( tuple4RVec_t WVF_dec ){ return (int)get<0>(WVF_dec).size();  }, {"ch0Decoded" } )
 		.Define("ch0Ndwn"       , []( tuple4RVec_t WVF_dec ){ return (int)get<1>(WVF_dec).size();  }, {"ch0Decoded" } ) 
 		.Define("ch0timeups"    , []( tuple4RVec_t WVF_dec ){ return get<0>(WVF_dec);              }, {"ch0Decoded" } )
