@@ -18,4 +18,4 @@ for filename in ${DAQERMFOLDER}/../DAQpreprocessed/run${RUN}meas*_amulet.root; d
 	./../digitizer_scripts/logicSignalAnalysis "$filename"
 done
 
-./../digitizer_scripts/lifetime2 ${DAQPROCESSEDFOLDER} ${DAQERMFOLDER}/../DAQpreprocessed/ ${RUN}
+./../digitizer_scripts/lifetime ${DAQPROCESSEDFOLDER} ${DAQERMFOLDER}/../DAQpreprocessed/ ${RUN}

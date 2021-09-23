@@ -94,7 +94,7 @@ vector<TNamed> GetEffString(ROOT::RDF::RCutFlowReport CutReport){
 		const auto eff = ci.GetEff();
 		const auto cumulativeEff = 100.f * float(pass) / float(allEntries);
 		string effStr;
-		effStr += name + " pass = "+ pass +"\nall=" + all +  "\n-- eff=" + eff + "\ncumulative eff=" + cumulativeEff+"\n\n";
+		effStr += name + " pass = "+ pass +"all=" + all +  "-- eff=" + eff + "cumulative eff=" + cumulativeEff+" ";
 		results.push_back(TNamed(name,effStr));
 	}
 	return results;
@@ -117,13 +117,13 @@ int main(int argc, char** argv)
 
 	double StopSignalSystematicCorrection = -4.0651e-9;
 	if( StopSignalSystematicCorrection != 0 )
-		cout	<<"+---------------------------------------------------------"<<endl
-			<<"| WARNING: APPLYING HARD CODED SYSTEMATIC TIME CORRECTION!!"<<endl
-			<<"| value = "<<StopSignalSystematicCorrection<<endl
-			<<"| this correction depends on your specific apparatus! change it accordingly or set to 0!"<<endl
-			<<"| it was measured thanks to run11 where we made a triple coincidence measurement in"<<endl
-			<<"| order to measure the delay due to cables"<<endl
-			<<"+--------------------------------------------------------"<<endl;
+		cout	<<"+----------------------------------------------------------------------------------------+"<<endl
+			<<"| WARNING: APPLYING HARD CODED SYSTEMATIC TIME CORRECTION!!                              |"<<endl
+			<<"| value = "<<StopSignalSystematicCorrection                                                <<endl
+			<<"| this correction depends on your specific apparatus! change it accordingly or set to 0! |"<<endl
+			<<"| it was measured thanks to run11 where we made a triple coincidence measurement in      |"<<endl
+			<<"| order to measure the delay due to cables                                               |"<<endl
+			<<"+----------------------------------------------------------------------------------------+"<<endl;
 
 	//declare the struct to the CLING compiler
 	gInterpreter->Declare("typedef struct {double sqFall, sqFallErr; double sqRise, sqRiseErr; double sqWdt = sqFall - sqRise; double sqWdtErr = TMath::Sqrt(sqFall*sqFall + sqRise*sqRise);} Square_Signal;");
