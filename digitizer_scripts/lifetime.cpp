@@ -33,9 +33,9 @@ using std::string;
 
 //struct representing a square signal: falling edge and rising edge 
 typedef struct {
-	double sqFall, sqFallErr;
-	double sqRise, sqRiseErr;
-	double sqWdt = sqFall - sqRise;
+	double sqFall=0, sqFallErr=0;
+	double sqRise=0, sqRiseErr=0;
+	double sqWdt = sqRise - sqFall;
 	double sqWdtErr = TMath::Sqrt(sqFall*sqFall + sqRise*sqRise);
 } Square_Signal;
 
@@ -126,7 +126,7 @@ int main(int argc, char** argv)
 			<<"+----------------------------------------------------------------------------------------+"<<endl;
 
 	//declare the struct to the CLING compiler
-	gInterpreter->Declare("typedef struct {double sqFall, sqFallErr; double sqRise, sqRiseErr; double sqWdt = sqFall - sqRise; double sqWdtErr = TMath::Sqrt(sqFall*sqFall + sqRise*sqRise);} Square_Signal;");
+	gInterpreter->Declare("typedef struct {double sqFall=0, sqFallErr=0; double sqRise=0, sqRiseErr=0; double sqWdt = sqRise - sqFall; double sqWdtErr = TMath::Sqrt(sqFall*sqFall + sqRise*sqRise);} Square_Signal;");
 	gInterpreter->Declare("typedef struct {Square_Signal start; Square_Signal stop; double dtFall = stop.sqFall - start.sqFall; double dtFallErr = TMath::Sqrt(stop.sqFallErr*stop.sqFallErr + start.sqFallErr*start.sqFallErr); double dtRise = stop.sqRise - start.sqRise; double dtRiseErr = TMath::Sqrt(stop.sqRiseErr*stop.sqRiseErr + start.sqRiseErr*start.sqRiseErr); } Decay_Event;");
 	
 	//setting I\O file names
@@ -184,38 +184,44 @@ int main(int argc, char** argv)
 	//create df
 	ROOT::RDataFrame df(myChain);
 	
-	auto d = df.Define("topology", EvaluateDecayTopology, {"ch0Nup","ch0Ndwn","ch1Nup","ch1Ndwn"});
+	auto d = df.Define("topology", EvaluateDecayTopology, {"ch0Nup","ch0Ndwn","ch1Nup","ch1Ndwn"})
+		   .Define("runN", [runN]()->short int{return std::stoi(runN);});
 		
 	//apply cuts (filters) and print report
 	auto rejected = d.Filter("abs(topology) != 1", "rejected");
 	auto accepted = d.Filter("abs(topology) == 1", "accepted");
 	auto upDecays = accepted.Filter("topology == 1", "up decay");
 	auto dwnDecays =accepted.Filter("topology == -1", "dwn decay");
-	accepted.Report()->Print();
-	rejected.Report()->Print();
-	cout<<endl;
-	auto upReport = upDecays.Report();
-	upReport->Print();
-	auto dwnReport = dwnDecays.Report();
-	dwnReport->Print();
 
 	//evaluate lifetimes from digital signals defining new columns in the dataframe
-	auto dtUpDec  = upDecays.Define("UpDecay"   , GetSameChSquare, {"ch0timedwns","ch0timedwnsErr","ch0timeups","ch0timeupsErr" } );
+	auto dtUpDec  = upDecays.Define("Decay"   , GetSameChSquare, {"ch0timedwns","ch0timedwnsErr","ch0timeups","ch0timeupsErr" } );
 	auto dtDwnDec = dwnDecays.Define("StopSignalSystematicCorrection", [StopSignalSystematicCorrection]()->double{return StopSignalSystematicCorrection;}, {})
-				 .Define("DwnDecay", GetDiffChSquare, {"ch0timeups", "ch0timeupsErr", "ch1timeups", "ch1timeupsErr","ch0timedwns", "ch0timedwnsErr", "ch1timedwns", "ch1timedwnsErr","StopSignalSystematicCorrection"} );
+				 .Define("Decay", GetDiffChSquare, {"ch0timedwns", "ch0timedwnsErr", "ch1timedwns", "ch1timedwnsErr","ch0timeups", "ch0timeupsErr", "ch1timeups", "ch1timeupsErr","StopSignalSystematicCorrection"} );
 	
 	//save dataframes in external file
-	accepted.Snapshot("Decays", OutFileName.c_str(),{"measN","idx","topology","ch0Nup","ch0Ndwn","ch1Nup","ch1Ndwn"});
+	accepted.Snapshot("Decays", OutFileName.c_str(),{"runN","measN","idx","topology","ch0Nup","ch0Ndwn","ch1Nup","ch1Ndwn"});
 	ROOT::RDF::RSnapshotOptions optsSnapshot;
 	optsSnapshot.fMode = "UPDATE"; //to write the tree in the same file
-	dtDwnDec.Snapshot("DwnDecays", OutFileName.c_str(),   {	"measN","idx","DwnDecay"	}, optsSnapshot );
-	dtUpDec.Snapshot ( "UpDecays", OutFileName.c_str(),   {	"measN","idx","UpDecay"		}, optsSnapshot );
-	rejected.Snapshot("Rejected" , OutFileName.c_str(),   {	"measN","idx","topology","ch0Nup",
-								"ch0Ndwn","ch1Nup","ch1Ndwn",
+	dtDwnDec.Snapshot("DwnDecays", OutFileName.c_str(),   {	"runN","measN","idx","Decay"	}, optsSnapshot );
+	dtUpDec.Snapshot ( "UpDecays", OutFileName.c_str(),   {	"runN","measN","idx","Decay"	}, optsSnapshot );
+	rejected.Snapshot("Rejected" , OutFileName.c_str(),   {	"runN","measN","idx","topology",
+								"ch0Nup","ch0Ndwn","ch1Nup","ch1Ndwn",
 								"ch0_wvf_time","ch0_wvf_amp",
 								"ch1_wvf_time","ch1_wvf_amp"	}, optsSnapshot ); //for the rejected save also the wvf so you can examine what went wrong
 	
 	TFile f(OutFileName.c_str(),"UPDATE");
+	
+	auto upReport = upDecays.Report();
+	upReport->Print();
+	auto dwnReport = dwnDecays.Report();
+	dwnReport->Print();
+	auto upEffStr = GetEffString( (*upReport) );
+	auto dwnEffStr = GetEffString( (*dwnReport) );
+	for( const auto & name : upEffStr )
+		name.Write();
+	for( const auto & name : dwnEffStr )
+		name.Write();
+	
 	auto *tmain = f.Get<TTree>("Decays");
 	
 	//use BuildIndex to make DwnDecays a friend of Decay
@@ -244,15 +250,6 @@ int main(int argc, char** argv)
 		tmain->AddFriend(tfriend2);
 		tmain->Write("",TObject::kOverwrite);
 	}else cout<<"Tree Rejected not found, not added as friend"<<endl;
-	
-	auto upEffStr = GetEffString( (*upReport) );
-	auto dwnEffStr = GetEffString( (*dwnReport) );
-	for( const auto & name : upEffStr )
-		name.Write();
-	for( const auto & name : dwnEffStr )
-		name.Write();
-
-
 	f.Close();
 	
 	cout<<"\nDATAFRAME CREATED IN FILE "<<OutFileName<<endl<<endl;
