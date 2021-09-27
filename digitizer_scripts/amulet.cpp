@@ -223,7 +223,7 @@ map<const char*, TH1D> GetDecayHistos(RNode df, double binWdt, TString name_pref
 	const char* var = "dt";
 	
 	double max = df.Max(var).GetValue();
-	TH1D htot = *df.Histo1D<double>(	{name_prefix+"UpDecay",name_prefix+"UpDecay;time [s];events per "+to_string(binWdt*1e06).substr(0,4)+" #mus",
+	TH1D htot = *df.Histo1D<double>(	{name_prefix+"Decay",name_prefix+"Decay;time [s];events per "+to_string(binWdt*1e06).substr(0,4)+" #mus",
 						static_cast<int>((max+0.1*max)/binWdt),0,max+0.1*max},	var);
 	
 	max = df.Filter("topology==1").Max(var).GetValue();
@@ -235,68 +235,77 @@ map<const char*, TH1D> GetDecayHistos(RNode df, double binWdt, TString name_pref
 	TH1D hdwn = *df.Filter("topology==0")
 		       .Histo1D<double>( {name_prefix+"DwnDecay",name_prefix+"DwnDecay;time [s];events per "+to_string(binWdt*1e06).substr(0,4)+" #mus",
 						static_cast<int>((max+0.1*max)/binWdt),0,max+0.1*max},	var);
-	hup.Sumw2();
-	hdwn.Sumw2();
+
 	return {{"up",hup},{"dwn",hdwn},{"htot",htot}};
 }
 
-RDataFrame GetWriteDecayDF(RNode dfUp, RNode dfDwn, TFile* f){
+void WriteDecayTree(RNode dfUp, RNode dfDwn, TFile* f){
 	std::string_view var = "Decay.dtFall";
 	auto ups = dfUp.Take<double>(var);
 	auto dwns= dfDwn.Take<double>(var);
 	double dt;
 	bool topology; 
-	TTree *tree = new TTree("decays","decays");
-	tree->Branch("dt",&dt,"dt/D");
-	tree->Branch("topology",&topology,"topology/O");
+	TTree tree("decays","decays");
+	tree.Branch("dt",&dt,"dt/D");
+	tree.Branch("topology",&topology,"topology/O");
 	for( const auto & updt : ups ){
 		dt = updt;
 		topology = true;
-		tree->Fill();
+		tree.Fill();
 	}
 	for( const auto & dwndt : dwns ){
 		dt = dwndt;
 		topology = false;
-		tree->Fill();
+		tree.Fill();
 	}
-	tree->Write();
-	return RDataFrame(*tree);
+	tree.Write();
 }
 
-void WriteBinNumberStabilityFixedRange(RNode decaydf, TFile* f, double rmin, double rmax, int N_iter){
+void WriteBinNumberStabilityFixedRange(RNode decaydf, double rmin, double rmax, int N_iter, TString RootOut){
 	double time_res_from_run11 = 2.179e-9;
-	//vector<map<const char*, TH1D>> hs;
-	double binWdtMin = time_res_from_run11;
-	double binWdtMax = 1e-6;
+	double binWdtMin = time_res_from_run11/2;
+	double binWdtMax = 1.5e-6;
+	double step = (binWdtMax-binWdtMin)/static_cast<long double>(N_iter);
 	auto gtau  = TGraphAsymmErrors(N_iter);
 	auto gchi2 = TGraph(N_iter);
 	TString name="BinWidthStability";
 	TString title="Bin width stability; Bin Width [s]; #tau_{#mu} [s]";
 	gtau.SetNameTitle(name+"_tau",title);
 	gchi2.SetNameTitle(name+"_chi2","#chi2 bin width stability; Bin Width [s]; #frac{#chi2}{NDF}");
-	for( int i = 1; i<=N_iter; i++){
-		double binWdt = static_cast<double>(i)*(binWdtMax-binWdtMin)/static_cast<double>(N_iter);
+	for( int i = 0; i<N_iter; i++ ){
+		double binWdt = binWdtMin + static_cast<long double>(i)*step;
+		cout<<"iter: "<<i<<" of "<<N_iter<<"\twdt: "<<binWdt<<endl;
 		auto hs = GetDecayHistos(decaydf, binWdt, to_string(binWdt));
 		//auto hup = hs["up"], hdwn = hs["dwn"];
 		auto htot = hs["htot"];
-		auto func = new TF1("decay_law","[N]*exp(-x/[#tau])+[B]",rmin,rmax);
+		string myformula ="[N]*exp(-x/[#tau])+[b]";
+		//string myformula ="([N]/[#tau])*exp(-x/[#tau])+[b]";
+		auto func = new TF1("decay_law",myformula.c_str(),rmin,rmax);
 		auto tau_idx = func->GetParNumber("#tau");
 		func->SetParameter(tau_idx, 2.167e-6);
-		TFitResultPtr fitres = htot.Fit(func,"LEQRS");
+		func->SetParameter("N",htot.GetBinContent(htot.FindBin(rmin)));
+		func->SetParameter("B",htot.GetBinContent(htot.FindBin(rmax)));
+		TFitResultPtr fitres = htot.Fit(func,"ERQS");
 		//fitres->Print("V");
 		bool status = fitres->IsValid() && fitres->Status()==0 && fitres->HasMinosError(tau_idx);
 		if( status ){
-			int j = i-1;
-			gtau.SetPoint(j, binWdt, fitres->Parameter(tau_idx));
-			gtau.SetPointError(j, 0, 0, fitres->LowerError(tau_idx), fitres->UpperError(tau_idx));
-			gchi2.SetPoint(j, binWdt, fitres->Chi2()/fitres->Ndf());
+			gtau.SetPoint(i, binWdt, fitres->Parameter(tau_idx));
+			gtau.SetPointError(i, 0, 0, abs(fitres->LowerError(tau_idx)), fitres->UpperError(tau_idx));
+			gchi2.SetPoint(i, binWdt, fitres->Chi2()/fitres->Ndf());
 		}else{
-			cout<<"Fit for bin wdt = "<<binWdt<<" has failed";
+			cout<<"Fit for bin wdt = "<<binWdt<<" has failed, "<<
+			"status: "<<fitres->Status()<<" valid: "<<fitres->IsValid()<<endl;
 		}
 		delete func;
 	}
-	gtau.Write();
-	gchi2.Write();
+	TFile f(RootOut,"UPDATE");
+	if(f.IsZombie()){
+		cout<<"Failed to open file "<<RootOut<<endl;
+	}else{
+		gtau.Write("",TObject::kOverwrite);
+		gchi2.Write("",TObject::kOverwrite);
+		f.Close();
+	}
 }
 
 int main(int argc, char** argv)
@@ -344,15 +353,22 @@ int main(int argc, char** argv)
 	auto res = ApplyRunBasedStopCuts(outFile, dfUp, dfDwn);
 	WriteDecayHistos(res.at("upbad"), res.at("dwnbad"), outFile, binWdt, "bad");
 	WriteDecayHistos(res.at("up"), res.at("dwn"), outFile, binWdt, "filtered");
-	
-
-	RDataFrame decaydf = GetWriteDecayDF(dfUp, dfDwn, outFile);
-	double rmin = 0.9e-6, rmax = 9e-6;  
-	WriteBinNumberStabilityFixedRange(decaydf, outFile, rmin, rmax, 3);
-
+	WriteDecayTree(dfUp, dfDwn, outFile);
 	outFile->Close();
+	RDataFrame decaydf("decays",RootOut);
+	double rmin = 0.6e-6, rmax = 9.1e-6;
+	int N_iters = 100;	
+	WriteBinNumberStabilityFixedRange(decaydf, rmin, rmax, N_iters, RootOut);
+
 
 	cout<<"File "<<RootOut<<" RECREATED"<<endl<<endl;
 	
 	return 0;
 }
+/* idea da provare per funzione: \TODO capire bene se la normalizzazione e corretta
+		std::ostringstream rminstr, rmaxstr, nbinsstr;
+		rminstr<<rmin;
+		rmaxstr<<rmax;
+		nbinsstr<<htot.GetNbinsX();
+		string myformula = "(2./("+nbinsstr.str()+"*[#tau]*(exp(-"+rminstr.str()+"/[#tau])-exp(-"+rmaxstr.str()+"/[#tau]))))*exp(-x/[#tau])+[B]";
+*/
