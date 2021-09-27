@@ -274,7 +274,8 @@ void WriteBinNumberStabilityFixedRange(RNode decaydf, double rmin, double rmax, 
 	gchi2.SetNameTitle(name+"_chi2","#chi2 bin width stability; Bin Width [s]; #frac{#chi2}{NDF}");
 	for( int i = 0; i<N_iter; i++ ){
 		double binWdt = binWdtMin + static_cast<long double>(i)*step;
-		cout<<"iter: "<<i<<" of "<<N_iter<<"\twdt: "<<binWdt<<endl;
+		int NbinsInFitRange = (rmax-rmin)/binWdt;
+		cout<<"iter: "<<i<<" of "<<N_iter<<"\twdt: "<<binWdt<<"\tN bins in fit range: "<<NbinsInFitRange<<endl;
 		auto hs = GetDecayHistos(decaydf, binWdt, to_string(binWdt));
 		//auto hup = hs["up"], hdwn = hs["dwn"];
 		auto htot = hs["htot"];
@@ -283,9 +284,9 @@ void WriteBinNumberStabilityFixedRange(RNode decaydf, double rmin, double rmax, 
 		auto func = new TF1("decay_law",myformula.c_str(),rmin,rmax);
 		auto tau_idx = func->GetParNumber("#tau");
 		func->SetParameter(tau_idx, 2.167e-6);
-		func->SetParameter("N",htot.GetBinContent(htot.FindBin(rmin)));
+		//func->SetParameter("N",htot.GetBinContent(htot.FindBin(rmin)));
 		func->SetParameter("B",htot.GetBinContent(htot.FindBin(rmax)));
-		TFitResultPtr fitres = htot.Fit(func,"ERQS");
+		TFitResultPtr fitres = htot.Fit(func,"LERQS");
 		//fitres->Print("V");
 		bool status = fitres->IsValid() && fitres->Status()==0 && fitres->HasMinosError(tau_idx);
 		if( status ){
@@ -357,7 +358,7 @@ int main(int argc, char** argv)
 	outFile->Close();
 	RDataFrame decaydf("decays",RootOut);
 	double rmin = 0.6e-6, rmax = 9.1e-6;
-	int N_iters = 100;	
+	int N_iters = 10;	
 	WriteBinNumberStabilityFixedRange(decaydf, rmin, rmax, N_iters, RootOut);
 
 
@@ -369,6 +370,6 @@ int main(int argc, char** argv)
 		std::ostringstream rminstr, rmaxstr, nbinsstr;
 		rminstr<<rmin;
 		rmaxstr<<rmax;
-		nbinsstr<<htot.GetNbinsX();
+		nbinsstr<<NbinsInFitRange;
 		string myformula = "(2./("+nbinsstr.str()+"*[#tau]*(exp(-"+rminstr.str()+"/[#tau])-exp(-"+rmaxstr.str()+"/[#tau]))))*exp(-x/[#tau])+[B]";
 */
