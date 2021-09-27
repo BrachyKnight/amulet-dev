@@ -18,14 +18,15 @@ def GetFilesList(path):
 
 if __name__ == "__main__":
 
-    if len(sys.argv) != 2:
+    if len(sys.argv) != 3:
         raise Exception("input error")
 
     runName = sys.argv[1]
+    path = sys.argv[2]
 
     with open("ThOpt_run"+runName+".txt", "w+") as txt:
         acc, up, dwn, min_, max_ = array('d'), array('d'), array('d'), array('d'), array('d')
-        for j,el in enumerate(GetFilesList(".")):
+        for j,el in enumerate(GetFilesList(path)):
             minTh = float(el[0])
             maxTh = float(el[1])
             min_.append(minTh)
@@ -52,7 +53,7 @@ if __name__ == "__main__":
 
     c = TCanvas()
     g = TGraph(len(min_), min_, acc)
-    axisTitles=";lower threshold limit [%pulse width]; #varepsilon [%]"
+    axisTitles=";lower threshold limit [%pulse height]; #varepsilon [%]"
     gtitle = "cumulative efficiency accepted"
     g.SetNameTitle(gtitle,gtitle+axisTitles)
     g.SetMarkerSize(1)
