@@ -54,29 +54,29 @@ void WriteWidthHistos( RNode dfUp, RNode dfDwn, TFile* f ){
 	double wdt = 0.5e-9;
 	double min=0, max=0;
 	
-	min = dfDwn.Min("Decay.start.sqWdt").GetValue();
-	max = dfDwn.Max("Decay.start.sqWdt").GetValue();
+	min = dfDwn.Min<double>("Decay.start.sqWdt").GetValue();
+	max = dfDwn.Max<double>("Decay.start.sqWdt").GetValue();
 	TH1D startWdtDwn = *dfDwn.Histo1D<double>({"Start_Width_Dwn",
 						"Start Width;time [s];counts per "+TString(to_string(wdt*1e9).substr(0,5))+" ns",
 						static_cast<int>((max-min)/wdt), min, max},
 						"Decay.start.sqWdt");
 	
-	min = dfDwn.Min("Decay.stop.sqWdt").GetValue();
-	max = dfDwn.Max("Decay.stop.sqWdt").GetValue();
+	min = dfDwn.Min<double>("Decay.stop.sqWdt").GetValue();
+	max = dfDwn.Max<double>("Decay.stop.sqWdt").GetValue();
 	TH1D stopWdtDwn = *dfDwn.Histo1D<double>({"Stop_Width_Dwn",
 						"Stop Width;time [s];counts per "+TString(to_string(wdt*1e9).substr(0,5))+" ns",
 						static_cast<int>((max-min)/wdt), min, max},
 						"Decay.stop.sqWdt");
 	
-	min = dfUp.Min("Decay.start.sqWdt").GetValue();
-	max = dfUp.Max("Decay.start.sqWdt").GetValue();
+	min = dfUp.Min<double>("Decay.start.sqWdt").GetValue();
+	max = dfUp.Max<double>("Decay.start.sqWdt").GetValue();
 	TH1D startWdtUp = *dfUp.Histo1D<double>({"Start_Width_Up",
 						"Start Width;time [s];counts per "+TString(to_string(wdt*1e9).substr(0,5))+" ns",
 						static_cast<int>((max-min)/wdt), min, max},
 						"Decay.start.sqWdt");
 	
-	min = dfUp.Min("Decay.stop.sqWdt").GetValue();
-	max = dfUp.Max("Decay.stop.sqWdt").GetValue();
+	min = dfUp.Min<double>("Decay.stop.sqWdt").GetValue();
+	max = dfUp.Max<double>("Decay.stop.sqWdt").GetValue();
 	TH1D stopWdtUp = *dfUp.Histo1D<double>({"Stop_Width_Up",
 						"Stop Width;time [s];counts per "+TString(to_string(wdt*1e9).substr(0,5))+" ns",
 						static_cast<int>((max-min)/wdt), min, max},
@@ -92,15 +92,15 @@ void WriteStopSignalFallTimeHistos( RNode dfUp, RNode dfDwn, TFile* f ){
 	double wdt = 1.5e-9;
 	double min=0, max=0;
 	
-	min = dfDwn.Min("Decay.stop.sqFall").GetValue();
-	max = dfDwn.Max("Decay.stop.sqFall").GetValue();
+	min = dfDwn.Min<double>("Decay.stop.sqFall").GetValue();
+	max = dfDwn.Max<double>("Decay.stop.sqFall").GetValue();
 	TH1D stopDwn = *dfDwn.Histo1D<double>({"Dwn_Stop_Time",
 						"Stop Time Dwn Decays;time [s];counts per "+TString(to_string(wdt*1e9).substr(0,5))+" ns",
 						static_cast<int>((max-min)/wdt), min-0.1*(max-min), max+0.1*(max-min)},
 						"Decay.stop.sqFall");
 	
-	min = dfUp.Min("Decay.stop.sqFall").GetValue();
-	max = dfUp.Max("Decay.stop.sqFall").GetValue();
+	min = dfUp.Min<double>("Decay.stop.sqFall").GetValue();
+	max = dfUp.Max<double>("Decay.stop.sqFall").GetValue();
 	TH1D stopUp = *dfUp.Histo1D<double>({"Up_Stop_Time",
 						"Stop Width Up Decays;time [s];counts per "+TString(to_string(wdt*1e9).substr(0,5))+" ns",
 						static_cast<int>((max-min)/wdt), min-0.1*(max-min), max+0.1*(max-min)},
@@ -132,45 +132,45 @@ map<const char*,bool> GetRunBasedStopCuts( short int run, double sqFall ){
 	bool up=false, dwn=false;
 	switch (run){
 		case 1:
-		up =  (sqFall<9.9e-6)    || (sqFall>10.4e-6 && sqFall<10.62e-6);
-		dwn = up;
+			up =  (sqFall<9.9e-6)    || (sqFall>10.4e-6 && sqFall<10.62e-6);
+			dwn = up;
 		break;
 		case 3:
-		up =  (sqFall<9.9e-6)    || (sqFall>10.4e-6 && sqFall<10.62e-6);
-		dwn = up;
+			up =  (sqFall<9.9e-6)    || (sqFall>10.4e-6 && sqFall<10.62e-6);
+			dwn = up;
 		break;
 		case 4:
-		up =  (sqFall<8.75e-6) || (sqFall>8.9e-6 && sqFall<9.185e-6) || (sqFall>11.1e-6 && sqFall<11.47e-6);
-		dwn = up;
+			up =  (sqFall<8.75e-6) || (sqFall>8.9e-6 && sqFall<9.185e-6) || (sqFall>11.1e-6 && sqFall<11.47e-6);
+			dwn = up;
 		break;
 		case 5:
-		up = sqFall<12.052e-6;
-		dwn = up;
+			up = sqFall<12.052e-6;
+			dwn = up;
 		break;
 		case 6:
-		up = sqFall<85.89e-6;
-		dwn = up;
+			up = sqFall<85.89e-6;
+			dwn = up;
 		break;
 		case 7:
-		up = sqFall<21.3765e-6;
-		dwn = up;
+			up = sqFall<21.3765e-6;
+			dwn = up;
 		break;
 		case 8:
-		up = (sqFall<17.36e-6) || (sqFall>19.4e-6 && sqFall<19.65e-6) || (sqFall>21.1e-6 && sqFall<21.37e-6);
-		dwn = up;
+			up = (sqFall<17.36e-6) || (sqFall>19.4e-6 && sqFall<19.65e-6) || (sqFall>21.1e-6 && sqFall<21.37e-6);
+			dwn = up;
 		break;
 		case 9:
-		up =  (sqFall<12.05e-6) || (sqFall>16.8e-6 && sqFall<17.07e-6) || (sqFall>21e-6 && sqFall<21.374e-6);
-		dwn = up;
+			up =  (sqFall<12.05e-6) || (sqFall>16.8e-6 && sqFall<17.07e-6) || (sqFall>21e-6 && sqFall<21.374e-6);
+			dwn = up;
 		break;
 		case 10:
-		up =  (sqFall<14.21e-6) || (sqFall>17e-6 && sqFall<17.364e-6) || (sqFall>19e-6 && sqFall<19.65e-6);
-		dwn = up;
+			up =  (sqFall<14.21e-6) || (sqFall>17e-6 && sqFall<17.364e-6) || (sqFall>19e-6 && sqFall<19.65e-6);
+			dwn = up;
 		break;
 		default:
-		cout<<"Warning: sqFall not implemented for run "<<run<<endl;
-		dwn = true;
-		up = true;
+			cout<<"Warning: sqFall not implemented for run "<<run<<endl;
+			dwn = true;
+			up = true;
 	}
 	return {{"dwn",!dwn}, {"up",!up}, {"antidwn",dwn}, {"antiup",up}};
 }
@@ -209,12 +209,12 @@ map<const char*, RNode> ApplyRunBasedStopCuts(TFile* f, RNode dfUp, RNode dfDwn)
 void WriteDecayHistos(RNode dfUp, RNode dfDwn, TFile* RootOut, double binWdt, TString name_prefix){
 	const char* var = "Decay.dtFall";
 	
-	double max = dfUp.Max(var).GetValue();
+	double max = dfUp.Max<double>(var).GetValue();
 	TH1D hup = *dfUp.Histo1D<double>(	{name_prefix+"_UpDecay",name_prefix+"UpDecay;time [s];events per "+to_string(binWdt*1e06).substr(0,5)+" #mus",
 						static_cast<int>((max+0.1*max)/binWdt),0,max+0.1*max},	var);
 	hup.Write("",TObject::kOverwrite);
 	
-	max = dfDwn.Max(var).GetValue();
+	max = dfDwn.Max<double>(var).GetValue();
 	TH1D hdwn = *dfDwn.Histo1D<double>(	{name_prefix+"_DwnDecay",name_prefix+"DwnDecay;time [s];events per "+to_string(binWdt*1e06).substr(0,5)+" #mus",
 						static_cast<int>((max+0.1*max)/binWdt),0,max+0.1*max},	var);
 	hdwn.Write("",TObject::kOverwrite);
@@ -223,16 +223,16 @@ void WriteDecayHistos(RNode dfUp, RNode dfDwn, TFile* RootOut, double binWdt, TS
 map<const char*, TH1D> GetDecayHistos(RNode df, double binWdt, TString name_prefix){
 	const char* var = "dt";
 	
-	double max = df.Max(var).GetValue();
+	double max = df.Max<double>(var).GetValue();
 	TH1D htot = *df.Histo1D<double>(	{name_prefix+"Decay",name_prefix+"Decay;time [s];events per "+to_string(binWdt*1e06).substr(0,4)+" #mus",
 						static_cast<int>((max+0.1*max)/binWdt),0,max+0.1*max},	var);
 	
-	max = df.Filter("topology==1").Max(var).GetValue();
+	max = df.Filter("topology==1").Max<double>(var).GetValue();
 	TH1D hup = *df.Filter("topology==1")
 		      .Histo1D<double>(	{name_prefix+"UpDecay",name_prefix+"UpDecay;time [s];events per "+to_string(binWdt*1e06).substr(0,4)+" #mus",
 						static_cast<int>((max+0.1*max)/binWdt),0,max+0.1*max},	var);
 	
-	max = df.Filter("topology==0").Max(var).GetValue();
+	max = df.Filter("topology==0").Max<double>(var).GetValue();
 	TH1D hdwn = *df.Filter("topology==0")
 		       .Histo1D<double>( {name_prefix+"DwnDecay",name_prefix+"DwnDecay;time [s];events per "+to_string(binWdt*1e06).substr(0,4)+" #mus",
 						static_cast<int>((max+0.1*max)/binWdt),0,max+0.1*max},	var);
@@ -277,7 +277,7 @@ void WriteDecayTree(RNode dfUp, RNode dfDwn, TFile* f){
 			tree.Fill();
 		}
 	}
-	tree.Write();
+	tree.Write("",TObject::kOverwrite);
 }
 
 class AmuletFitCore {
@@ -368,10 +368,10 @@ class AmuletFitCore {
 
 
 //generate a list of n exponentially spaced numbers between first and last
-vector<double> ExpList(double first, double last, unsigned long int n){
-    vector<double> vector(n); 
-    double m = (double) 1 / (n - 1);
-    double quotient = pow(last / first, m);
+vector<long double> ExpList(long double first, long double last, unsigned long int n){
+    vector<long double> vector(n); 
+    long double m = (long double) 1 / (n - 1);
+    long double quotient = pow(last / first, m);
 
     vector[0] = first;
 
@@ -382,20 +382,20 @@ vector<double> ExpList(double first, double last, unsigned long int n){
 }
 
 void WriteBinNumberStabilityFixedRange(RNode decaydf, double rmin, double rmax, int N_iter, TString RootOut, int func_type=0){
-	double time_res_from_run11 = 2.179e-9;
-	double binWdtMin = time_res_from_run11/2;
-	double binWdtMax = 1.5e-6;
-	//double step = (binWdtMax-binWdtMin)/static_cast<long double>(N_iter);
+	long double time_res_from_run11 = 2.179e-9;
+	long double binWdtMin = time_res_from_run11/10;
+	long double binWdtMax = 1e-6*2; //non ha senso mettere piu di cosi
+	//long double step = (binWdtMax-binWdtMin)/static_cast<long double>(N_iter);
 	auto exp_spaced = ExpList(binWdtMin, binWdtMax, N_iter);
 	auto gtau  = TGraphAsymmErrors(N_iter);
 	auto gchi2 = TGraph(N_iter);
 	TString name="BinWidthStability";
-	TString title="Bin width stability; Bin Width [s]; #tau_{#mu} [s]";
+	TString title="Bin width stability;Bin Width [ns];#tau_{#mu} [#mus]";
 	gtau.SetNameTitle(name+"_tau",title);
-	gchi2.SetNameTitle(name+"_chi2","#chi2 bin width stability; Bin Width [s]; #frac{#chi2}{NDF}");
+	gchi2.SetNameTitle(name+"_chi2","#chi2 bin width stability;Bin Width [ns];#frac{#chi2}{NDF}");
 	for( int i = 0; i<N_iter; i++ ){
-		//double binWdt = binWdtMin + static_cast<long double>(i)*step;
-		double binWdt = exp_spaced[i];
+		//long double binWdt = binWdtMin + static_cast<long double>(i)*step;
+		long double binWdt = exp_spaced[i];
 		int NbinsInFitRange = (rmax-rmin)/binWdt;
 		cout<<"iter: "<<i<<" of "<<N_iter<<"\twdt: "<<binWdt<<"\tN bins in fit range: "<<NbinsInFitRange<<endl;
 		auto hs = GetDecayHistos(decaydf, binWdt, to_string(binWdt));
@@ -406,9 +406,9 @@ void WriteBinNumberStabilityFixedRange(RNode decaydf, double rmin, double rmax, 
 		//fitres.Print("V");
 		auto tau_idx = fitcore.GetParIdx("#tau");
 		if( fitcore.GetStatus() ){
-			gtau.SetPoint(i, binWdt, fitres.Parameter(tau_idx));
-			gtau.SetPointError(i, 0, 0, abs(fitres.LowerError(tau_idx)), fitres.UpperError(tau_idx));
-			gchi2.SetPoint(i, binWdt, fitres.Chi2()/fitres.Ndf());
+			gtau.SetPoint(i, binWdt*1e9, fitres.Parameter(tau_idx)*1e6);
+			gtau.SetPointError(i, 0, 0, abs(fitres.LowerError(tau_idx))*1e6, fitres.UpperError(tau_idx)*1e6);
+			gchi2.SetPoint(i, binWdt*1e9, fitres.Chi2()/fitres.Ndf());
 		}else{
 			cout<<"Fit for bin wdt = "<<binWdt<<" has FAILED, "<<
 			"status: "<<fitres.Status()<<" valid: "<<fitres.IsValid()<<endl;
@@ -425,19 +425,19 @@ void WriteBinNumberStabilityFixedRange(RNode decaydf, double rmin, double rmax, 
 }
 
 void WriteRangeStabilityFixedBins(RNode decaydf, double binWdt, int NitMin, int NitMax, TString RootOut, int func_type=0){
-	double stopWdtUp = decaydf.Filter("topology==1").Mean("stopWdt").GetValue();
-	double stopWdtDw = decaydf.Filter("topology==0").Mean("stopWdt").GetValue();
-	double stopWdt = std::min(stopWdtUp,stopWdtDw);
-	double startWdt = decaydf.Mean("startWdt").GetValue();
-	double rmin_min = stopWdt + startWdt;
-	double rmin_max =  10.5e-6;
-	double rmax_min = stopWdt + startWdt + 0.5e-6;
-	double rmax_max =  10e-6;
+	long double stopWdtUp = decaydf.Filter("topology==1").Mean("stopWdt").GetValue();
+	long double stopWdtDw = decaydf.Filter("topology==0").Mean("stopWdt").GetValue();
+	long double stopWdt = std::min(stopWdtUp,stopWdtDw);
+	long double startWdt = decaydf.Mean("startWdt").GetValue();
+	long double rmin_min = stopWdt + startWdt;
+	long double rmin_max =  10.5e-6;
+	long double rmax_min = stopWdt + startWdt + 0.5e-6;
+	long double rmax_max =  10e-6;
 	cout<<"Range stability: "<<endl;
 	cout<<"rmin min = "<<rmin_min<<"\t rmin max = "<<rmin_max<<endl;
 	cout<<"rmax min = "<<rmax_min<<"\t rmax max = "<<rmax_max<<endl<<endl;
-	double stepMin = (rmin_max-rmin_min)/static_cast<long double>(NitMin);
-	double stepMax = (rmax_max-rmax_min)/static_cast<long double>(NitMax);
+	long double stepMin = (rmin_max-rmin_min)/static_cast<long double>(NitMin);
+	long double stepMax = (rmax_max-rmax_min)/static_cast<long double>(NitMax);
 	auto gtau  = TGraph2DErrors();
 	auto gchi2 = TGraph2D();
 	TString name="RangeStability";
@@ -446,12 +446,14 @@ void WriteRangeStabilityFixedBins(RNode decaydf, double binWdt, int NitMin, int 
 	gchi2.SetNameTitle(name+"_chi2","#chi2 range stability;rmin [#mus];rmax [#mus]; #frac{#chi2}{NDF}");
 	int Npoint = 0;
 	for( int i = 0; i<NitMin; i++ ){
-		double rmin = rmin_min + static_cast<long double>(i)*stepMin;
+		long double rmin = rmin_min + static_cast<long double>(i)*stepMin;
 		for( int j = 0; j<NitMax; j++ ){
-			double rmax = rmax_min + static_cast<long double>(j)*stepMax;
-			if( rmax<rmin )
+			long double rmax = rmax_min + static_cast<long double>(j)*stepMax;
+			int NbinsInRange = abs(rmax-rmin)/binWdt;
+			if( rmax < rmin || NbinsInRange<6 )
 				continue;
-			cout<<"iter: ("<<i<<","<<j<<") of ("<<NitMin<<","<<NitMax<<")"<<"\trmin: "<<rmin<<"\trmax: "<<rmax<<endl;
+			cout<<"iter: ("<<i<<","<<j<<") of ("<<NitMin<<","<<NitMax<<")"<<"\trmin: "<<rmin<<"\trmax: "<<rmax
+			    <<"\tN bins in fit range: "<<NbinsInRange<<endl;
 			auto hs = GetDecayHistos(decaydf, binWdt, "rmin"+to_string(rmin*1e-6)+"rmax"+to_string(rmax*1e-6)+"#mus");
 			//auto hup = hs["up"], hdwn = hs["dwn"];
 			auto htot = hs["htot"];
@@ -518,7 +520,7 @@ int main(int argc, char** argv)
 	ROOT::RDataFrame dfUp(chainup);
 	ROOT::RDataFrame dfDwn(chaindwn);
 
-	TFile* outFile = TFile::Open(RootOut,"RECREATE");
+	TFile* outFile = TFile::Open(RootOut,"UPDATE");
 	WriteWidthHistos(dfUp, dfDwn, outFile);
 	WriteStopSignalFallTimeHistos(dfUp, dfDwn, outFile);
 	double binWdt = 2.179e-9*2;
@@ -531,11 +533,13 @@ int main(int argc, char** argv)
 	RDataFrame decaydf("decays",RootOut);
 	int func_type = 0;
 	
+	
 	double rmin = 0.6e-6, rmax = 9.1e-6;
 	int N_iters = 100;
 	WriteBinNumberStabilityFixedRange(decaydf, rmin, rmax, N_iters, RootOut, func_type);
 	
-	binWdt = 4e-8;
+	
+	binWdt = 20e-9;
 	int N_iters_min = 100;
 	int N_iters_max = 100;
 	WriteRangeStabilityFixedBins( decaydf, binWdt, N_iters_min, N_iters_max, RootOut, func_type);
