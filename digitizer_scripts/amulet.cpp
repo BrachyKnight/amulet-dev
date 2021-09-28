@@ -533,7 +533,7 @@ int main(int argc, char** argv)
 	
 	double rmin = 0.6e-6, rmax = 9.1e-6;
 	int N_iters = 100;
-	/WriteBinNumberStabilityFixedRange(decaydf, rmin, rmax, N_iters, RootOut, func_type);
+	WriteBinNumberStabilityFixedRange(decaydf, rmin, rmax, N_iters, RootOut, func_type);
 	
 	binWdt = 4e-8;
 	int N_iters_min = 100;
