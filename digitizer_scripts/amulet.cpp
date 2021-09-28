@@ -26,6 +26,7 @@
 #include <TFitResultPtr.h>
 #include <TFitResult.h>
 #include <TGraphAsymmErrors.h>
+#include <TGraph2DErrors.h>
 #include <TF1.h>
 
 using ROOT::RDF::RNode, ROOT::RDataFrame, ROOT::VecOps::RVec;
@@ -243,20 +244,38 @@ void WriteDecayTree(RNode dfUp, RNode dfDwn, TFile* f){
 	std::string_view var = "Decay.dtFall";
 	auto ups = dfUp.Take<double>(var);
 	auto dwns= dfDwn.Take<double>(var);
-	double dt;
+	std::string_view startWdtVar = "Decay.start.sqWdt";
+	std::string_view stopWdtVar = "Decay.stop.sqWdt";
+	vector<double> up_start_wdt = *dfUp.Take<double>(startWdtVar);
+	vector<double> dw_start_wdt = *dfDwn.Take<double>(startWdtVar);
+	vector<double> up_stop_wdt = *dfUp.Take<double>(stopWdtVar);
+	vector<double> dw_stop_wdt = *dfDwn.Take<double>(stopWdtVar);
+	double dt, startWdt, stopWdt;
 	bool topology; 
 	TTree tree("decays","decays");
 	tree.Branch("dt",&dt,"dt/D");
 	tree.Branch("topology",&topology,"topology/O");
-	for( const auto & updt : ups ){
-		dt = updt;
-		topology = true;
-		tree.Fill();
+	tree.Branch("startWdt",&startWdt,"startWdt/D");
+	tree.Branch("stopWdt", &stopWdt, "stopWdt/D" );
+	{ 	long int i = 0;
+		for( const auto & updt : ups ){
+			dt = updt;
+			startWdt = up_start_wdt[i];
+			stopWdt = up_stop_wdt[i];
+			topology = true;
+			i++;
+			tree.Fill();
+		}
 	}
-	for( const auto & dwndt : dwns ){
-		dt = dwndt;
-		topology = false;
-		tree.Fill();
+	{	long int i = 0;
+		for( const auto & dwndt : dwns ){
+			dt = dwndt;
+			startWdt = dw_start_wdt[i];
+			stopWdt = dw_stop_wdt[i];
+			topology = false;
+			i++;
+			tree.Fill();
+		}
 	}
 	tree.Write();
 }
@@ -271,17 +290,15 @@ class AmuletFitCore {
 			_fitopt = fitopt;
 			_h = h;
 			_status = false;
+			_binWdt = h.GetXaxis()->GetBinWidth(h.FindBin(rmin+(rmax-rmin)/2.));
 		};
 		~AmuletFitCore(){ delete _func; };
-		TFitResult AmuletFit(string myformula){
-			auto func = new TF1("decay_law",myformula.c_str(),_rmin,_rmax,"NL");
-			auto tau_idx = func->GetParNumber("#tau");
-			func->SetParameter(tau_idx, 2.197e-6);
-			func->SetParameter("N",_h.GetBinContent(_h.FindBin(_rmin))*2.197e-6);
-			func->SetParameter("B",_h.GetBinContent(_h.FindBin(_rmax)));
-			TFitResultPtr fitres = _h.Fit(func,_fitopt);	
+		TFitResult AmuletFit(int nformula = 0){
+			ChooseFormula(nformula);
+			auto tau_idx = _func->GetParNumber("#tau");
+			_func->SetParameter(tau_idx, 2.197e-6);
+			TFitResultPtr fitres = _h.Fit(_func,_fitopt);	
 			_status = fitres->IsValid() && fitres->Status()==0 && fitres->HasMinosError(tau_idx);
-			_func = func;
 			return *fitres;
 		};
 		inline const bool GetStatus(){return _status;};
@@ -289,16 +306,87 @@ class AmuletFitCore {
 	private:
 		TH1D _h;
 		Option_t *_fitopt;
-		double _rmin, _rmax;
+		double _rmin, _rmax, _binWdt;
 		bool _status;
 		TF1* _func;
+		void ChooseFormula( short int n ){
+			int NbinsInFitRange = (_rmax-_rmin)/_binWdt;
+			int NentriesInRange = _h.Integral(_h.FindBin(_rmin),_h.FindBin(_rmax));
+			std::ostringstream rminsstr, rmaxsstr, nbinsstr, nentriesstr;
+			rminsstr<<_rmin;
+			rmaxsstr<<_rmax;
+			nbinsstr<<NbinsInFitRange;
+			nentriesstr<<NentriesInRange;
+			string rmins = rminsstr.str();
+			string rmaxs = rmaxsstr.str();
+			string nbins = nbinsstr.str();
+			string entrs = nentriesstr.str();
+			string formula;
+			string lambda = "(1./[#tau])";
+			string exppdf = "ROOT::Math::exponential_pdf(x,"+lambda+")";
+			string unipdf = "ROOT::Math::uniform_pdf(x,"+rmins+","+rmaxs+")";
+			switch (n) {
+				case 1:
+				{
+					formula ="[N]*"+exppdf+"+[b]";
+					
+					_func = new TF1("decay_law", formula.c_str(), _rmin, _rmax, "NL");
+					_func->SetParameter("b",_h.GetBinContent(_h.FindBin(_rmax)));
+					_func->SetParameter("N",_h.GetBinContent(_h.FindBin(_rmin))*(2.197e-6));
+				}
+				break;
+				case 2:
+				{
+					formula ="[N]*"+exppdf+"+[B]*"+unipdf;
+					
+					_func = new TF1("decay_law", formula.c_str(), _rmin, _rmax, "NL");
+					_func->SetParameter("B",_h.GetBinContent(_h.FindBin(_rmax))*(_rmax-_rmin));
+					_func->SetParameter("N",_h.GetBinContent(_h.FindBin(_rmin))*(2.197e-6));
+				}
+				break;
+				case 3:
+				{
+					string normexp = "("+entrs+"/("+nbins+"*(exp(-"+rmins+"*"+lambda+")-exp("+rmaxs+"*"+lambda+"))))";
+					formula = "("+normexp+")*("+exppdf+")+[B]*"+unipdf;
+					
+					_func = new TF1("decay_law", formula.c_str(), _rmin, _rmax, "NL");
+					_func->SetParameter("B",_h.GetBinContent(_h.FindBin(_rmax))*(_rmax-_rmin));
+				}
+				break;
+				default:
+				{
+					formula ="[N0]*exp(-x*"+lambda+")+[B]";
+					
+					_func = new TF1("decay_law", formula.c_str(), _rmin, _rmax, "NL");
+					_func->SetParameter("N0",_h.GetBinContent(_h.FindBin(_rmin)));
+					_func->SetParameter("B",_h.GetBinContent(_h.FindBin(_rmax)));
+				}
+			}
+			if( !((TString)_fitopt).Contains("Q") ) cout<<"using: "<<formula<<endl;
+		};
 };
 
-void WriteBinNumberStabilityFixedRange(RNode decaydf, double rmin, double rmax, int N_iter, TString RootOut){
+
+//generate a list of n exponentially spaced numbers between first and last
+vector<double> ExpList(double first, double last, unsigned long int n){
+    vector<double> vector(n); 
+    double m = (double) 1 / (n - 1);
+    double quotient = pow(last / first, m);
+
+    vector[0] = first;
+
+    for (unsigned long int i = 1; i < n; i++)
+        vector[i] = vector[i - 1] * quotient;
+
+    return vector;
+}
+
+void WriteBinNumberStabilityFixedRange(RNode decaydf, double rmin, double rmax, int N_iter, TString RootOut, int func_type=0){
 	double time_res_from_run11 = 2.179e-9;
 	double binWdtMin = time_res_from_run11/2;
 	double binWdtMax = 1.5e-6;
-	double step = (binWdtMax-binWdtMin)/static_cast<long double>(N_iter);
+	//double step = (binWdtMax-binWdtMin)/static_cast<long double>(N_iter);
+	auto exp_spaced = ExpList(binWdtMin, binWdtMax, N_iter);
 	auto gtau  = TGraphAsymmErrors(N_iter);
 	auto gchi2 = TGraph(N_iter);
 	TString name="BinWidthStability";
@@ -306,26 +394,80 @@ void WriteBinNumberStabilityFixedRange(RNode decaydf, double rmin, double rmax, 
 	gtau.SetNameTitle(name+"_tau",title);
 	gchi2.SetNameTitle(name+"_chi2","#chi2 bin width stability; Bin Width [s]; #frac{#chi2}{NDF}");
 	for( int i = 0; i<N_iter; i++ ){
-		double binWdt = binWdtMin + static_cast<long double>(i)*step;
+		//double binWdt = binWdtMin + static_cast<long double>(i)*step;
+		double binWdt = exp_spaced[i];
 		int NbinsInFitRange = (rmax-rmin)/binWdt;
 		cout<<"iter: "<<i<<" of "<<N_iter<<"\twdt: "<<binWdt<<"\tN bins in fit range: "<<NbinsInFitRange<<endl;
 		auto hs = GetDecayHistos(decaydf, binWdt, to_string(binWdt));
 		//auto hup = hs["up"], hdwn = hs["dwn"];
 		auto htot = hs["htot"];
-		//string myformula ="[N]*exp(-x/[#tau])+[b]";
-		//string myformula ="([N]/[#tau])*exp(-x/[#tau])+[b]";
-		string myformula ="[N]*ROOT::Math::exponential_pdf(x,1./[#tau])+[B]";
-		//fitres->Print("V");
-		auto fitcore = AmuletFitCore(htot,rmin,rmax,"LEQRS");
-		TFitResult fitres = fitcore.AmuletFit(myformula);
+		auto fitcore = AmuletFitCore(htot,rmin,rmax,"LERSN0Q");
+		TFitResult fitres = fitcore.AmuletFit(0);
+		//fitres.Print("V");
 		auto tau_idx = fitcore.GetParIdx("#tau");
 		if( fitcore.GetStatus() ){
 			gtau.SetPoint(i, binWdt, fitres.Parameter(tau_idx));
 			gtau.SetPointError(i, 0, 0, abs(fitres.LowerError(tau_idx)), fitres.UpperError(tau_idx));
 			gchi2.SetPoint(i, binWdt, fitres.Chi2()/fitres.Ndf());
 		}else{
-			cout<<"Fit for bin wdt = "<<binWdt<<" has failed, "<<
+			cout<<"Fit for bin wdt = "<<binWdt<<" has FAILED, "<<
 			"status: "<<fitres.Status()<<" valid: "<<fitres.IsValid()<<endl;
+		}
+	}
+	TFile f(RootOut,"UPDATE");
+	if(f.IsZombie()){
+		cout<<"Failed to open file "<<RootOut<<endl;
+	}else{
+		gtau.Write("",TObject::kOverwrite);
+		gchi2.Write("",TObject::kOverwrite);
+		f.Close();
+	}
+}
+
+void WriteRangeStabilityFixedBins(RNode decaydf, double binWdt, int NitMin, int NitMax, TString RootOut, int func_type=0){
+	double stopWdtUp = decaydf.Filter("topology==1").Mean("stopWdt").GetValue();
+	double stopWdtDw = decaydf.Filter("topology==0").Mean("stopWdt").GetValue();
+	double stopWdt = std::min(stopWdtUp,stopWdtDw);
+	double startWdt = decaydf.Mean("startWdt").GetValue();
+	double rmin_min = stopWdt + startWdt;
+	double rmin_max =  10.5e-6;
+	double rmax_min = stopWdt + startWdt + 0.5e-6;
+	double rmax_max =  10e-6;
+	cout<<"Range stability: "<<endl;
+	cout<<"rmin min = "<<rmin_min<<"\t rmin max = "<<rmin_max<<endl;
+	cout<<"rmax min = "<<rmax_min<<"\t rmax max = "<<rmax_max<<endl<<endl;
+	double stepMin = (rmin_max-rmin_min)/static_cast<long double>(NitMin);
+	double stepMax = (rmax_max-rmax_min)/static_cast<long double>(NitMax);
+	auto gtau  = TGraph2DErrors();
+	auto gchi2 = TGraph2D();
+	TString name="RangeStability";
+	TString title="Range stability;rmin [#mus];rmax [#mus]; #tau_{#mu} [#mus]";
+	gtau.SetNameTitle(name+"_tau",title);
+	gchi2.SetNameTitle(name+"_chi2","#chi2 range stability;rmin [#mus];rmax [#mus]; #frac{#chi2}{NDF}");
+	int Npoint = 0;
+	for( int i = 0; i<NitMin; i++ ){
+		double rmin = rmin_min + static_cast<long double>(i)*stepMin;
+		for( int j = 0; j<NitMax; j++ ){
+			double rmax = rmax_min + static_cast<long double>(j)*stepMax;
+			if( rmax<rmin )
+				continue;
+			cout<<"iter: ("<<i<<","<<j<<") of ("<<NitMin<<","<<NitMax<<")"<<"\trmin: "<<rmin<<"\trmax: "<<rmax<<endl;
+			auto hs = GetDecayHistos(decaydf, binWdt, "rmin"+to_string(rmin*1e-6)+"rmax"+to_string(rmax*1e-6)+"#mus");
+			//auto hup = hs["up"], hdwn = hs["dwn"];
+			auto htot = hs["htot"];
+			auto fitcore = AmuletFitCore(htot,rmin,rmax,"LERSN0Q");
+			TFitResult fitres = fitcore.AmuletFit(0);
+			//fitres.Print("V");
+			auto tau_idx = fitcore.GetParIdx("#tau");
+			if( fitcore.GetStatus() ){
+				gtau.AddPoint(rmin*1e6, rmax*1e6, fitres.Parameter(tau_idx)*1e6);
+				Npoint++;
+				gtau.SetPointError(Npoint, 0, 0, fitres.Error(tau_idx)*1e6);
+				gchi2.AddPoint(rmin*1e6, rmax*1e6, fitres.Chi2()/fitres.Ndf());
+			}else{
+				cout<<"Fit for rmin = "<<rmin<<" and rmax = "<<rmax<<" has FAILED, "<<
+				"status: "<<fitres.Status()<<" valid: "<<fitres.IsValid()<<endl;
+			}
 		}
 	}
 	TFile f(RootOut,"UPDATE");
@@ -387,19 +529,19 @@ int main(int argc, char** argv)
 	WriteDecayTree(dfUp, dfDwn, outFile);
 	outFile->Close();
 	RDataFrame decaydf("decays",RootOut);
+	int func_type = 0;
+	
 	double rmin = 0.6e-6, rmax = 9.1e-6;
-	int N_iters = 10;	
-	WriteBinNumberStabilityFixedRange(decaydf, rmin, rmax, N_iters, RootOut);
+	int N_iters = 100;
+	/WriteBinNumberStabilityFixedRange(decaydf, rmin, rmax, N_iters, RootOut, func_type);
+	
+	binWdt = 4e-8;
+	int N_iters_min = 100;
+	int N_iters_max = 100;
+	WriteRangeStabilityFixedBins( decaydf, binWdt, N_iters_min, N_iters_max, RootOut, func_type);
 
 
 	cout<<"File "<<RootOut<<" RECREATED"<<endl<<endl;
 	
 	return 0;
 }
-/* idea da provare per funzione: \TODO capire bene se la normalizzazione e corretta
-		std::ostringstream rminstr, rmaxstr, nbinsstr;
-		rminstr<<rmin;
-		rmaxstr<<rmax;
-		nbinsstr<<NbinsInFitRange;
-		string myformula = "(2./("+nbinsstr.str()+"*[#tau]*(exp(-"+rminstr.str()+"/[#tau])-exp(-"+rmaxstr.str()+"/[#tau]))))*exp(-x/[#tau])+[B]";
-*/
