@@ -261,6 +261,39 @@ void WriteDecayTree(RNode dfUp, RNode dfDwn, TFile* f){
 	tree.Write();
 }
 
+class AmuletFitCore {
+	public:
+		AmuletFitCore(TH1D h, double rmin, double rmax, TString fitopt):
+		_rmin(rmin), _rmax(rmax)
+		{
+			if( !fitopt.Contains("S") )
+				fitopt+"S";
+			_fitopt = fitopt;
+			_h = h;
+			_status = false;
+		};
+		~AmuletFitCore(){ delete _func; };
+		TFitResult AmuletFit(string myformula){
+			auto func = new TF1("decay_law",myformula.c_str(),_rmin,_rmax,"NL");
+			auto tau_idx = func->GetParNumber("#tau");
+			func->SetParameter(tau_idx, 2.197e-6);
+			func->SetParameter("N",_h.GetBinContent(_h.FindBin(_rmin))*2.197e-6);
+			func->SetParameter("B",_h.GetBinContent(_h.FindBin(_rmax)));
+			TFitResultPtr fitres = _h.Fit(func,_fitopt);	
+			_status = fitres->IsValid() && fitres->Status()==0 && fitres->HasMinosError(tau_idx);
+			_func = func;
+			return *fitres;
+		};
+		inline const bool GetStatus(){return _status;};
+		inline const short int GetParIdx(const char* parname){ return (_func) ?  _func->GetParNumber(parname) : -1 ;}
+	private:
+		TH1D _h;
+		Option_t *_fitopt;
+		double _rmin, _rmax;
+		bool _status;
+		TF1* _func;
+};
+
 void WriteBinNumberStabilityFixedRange(RNode decaydf, double rmin, double rmax, int N_iter, TString RootOut){
 	double time_res_from_run11 = 2.179e-9;
 	double binWdtMin = time_res_from_run11/2;
@@ -279,25 +312,21 @@ void WriteBinNumberStabilityFixedRange(RNode decaydf, double rmin, double rmax, 
 		auto hs = GetDecayHistos(decaydf, binWdt, to_string(binWdt));
 		//auto hup = hs["up"], hdwn = hs["dwn"];
 		auto htot = hs["htot"];
-		string myformula ="[N]*exp(-x/[#tau])+[b]";
+		//string myformula ="[N]*exp(-x/[#tau])+[b]";
 		//string myformula ="([N]/[#tau])*exp(-x/[#tau])+[b]";
-		auto func = new TF1("decay_law",myformula.c_str(),rmin,rmax);
-		auto tau_idx = func->GetParNumber("#tau");
-		func->SetParameter(tau_idx, 2.167e-6);
-		//func->SetParameter("N",htot.GetBinContent(htot.FindBin(rmin)));
-		func->SetParameter("B",htot.GetBinContent(htot.FindBin(rmax)));
-		TFitResultPtr fitres = htot.Fit(func,"LERQS");
+		string myformula ="[N]*ROOT::Math::exponential_pdf(x,1./[#tau])+[B]";
 		//fitres->Print("V");
-		bool status = fitres->IsValid() && fitres->Status()==0 && fitres->HasMinosError(tau_idx);
-		if( status ){
-			gtau.SetPoint(i, binWdt, fitres->Parameter(tau_idx));
-			gtau.SetPointError(i, 0, 0, abs(fitres->LowerError(tau_idx)), fitres->UpperError(tau_idx));
-			gchi2.SetPoint(i, binWdt, fitres->Chi2()/fitres->Ndf());
+		auto fitcore = AmuletFitCore(htot,rmin,rmax,"LEQRS");
+		TFitResult fitres = fitcore.AmuletFit(myformula);
+		auto tau_idx = fitcore.GetParIdx("#tau");
+		if( fitcore.GetStatus() ){
+			gtau.SetPoint(i, binWdt, fitres.Parameter(tau_idx));
+			gtau.SetPointError(i, 0, 0, abs(fitres.LowerError(tau_idx)), fitres.UpperError(tau_idx));
+			gchi2.SetPoint(i, binWdt, fitres.Chi2()/fitres.Ndf());
 		}else{
 			cout<<"Fit for bin wdt = "<<binWdt<<" has failed, "<<
-			"status: "<<fitres->Status()<<" valid: "<<fitres->IsValid()<<endl;
+			"status: "<<fitres.Status()<<" valid: "<<fitres.IsValid()<<endl;
 		}
-		delete func;
 	}
 	TFile f(RootOut,"UPDATE");
 	if(f.IsZombie()){
@@ -323,6 +352,7 @@ int main(int argc, char** argv)
 	//declare the struct to the CLING compiler
 	gInterpreter->Declare("typedef struct {double sqFall=0, sqFallErr=0; double sqRise=0, sqRiseErr=0; double sqWdt = sqRise - sqFall; double sqWdtErr = TMath::Sqrt(sqFall*sqFall + sqRise*sqRise);} Square_Signal;");
 	gInterpreter->Declare("typedef struct {Square_Signal start; Square_Signal stop; double dtFall = stop.sqFall - start.sqFall; double dtFallErr = TMath::Sqrt(stop.sqFallErr*stop.sqFallErr + start.sqFallErr*start.sqFallErr); double dtRise = stop.sqRise - start.sqRise; double dtRiseErr = TMath::Sqrt(stop.sqRiseErr*stop.sqRiseErr + start.sqRiseErr*start.sqRiseErr); } Decay_Event;");
+	gSystem->Load("libMathMore");
 	
 	//use all cores of your machine MultiThreading to speed up analysis
 	//(read RDataFrame documentation for MT warnings)
