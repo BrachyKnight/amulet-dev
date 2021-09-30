@@ -31,8 +31,9 @@
 #include <TF1.h>
 #include <TStyle.h>
 #include <TCanvas.h>
+#include <Math/PdfFunc.h> //exponential_pdf() //uniform_pdf()
 
-using ROOT::RDF::RNode, ROOT::RDataFrame, ROOT::VecOps::RVec;
+using ROOT::RDF::RNode, ROOT::RDataFrame, ROOT::VecOps::RVec, ROOT::Math::exponential_pdf, ROOT::Math::uniform_pdf;
 using std::vector, std::pair, std::runtime_error, std::cout, std::endl, std::string, std::map, std::make_pair, std::to_string;
 
 //struct representing a square signal: falling edge and rising edge 
@@ -86,6 +87,11 @@ class AmuletFitCore {
 			kNormPdfB = 3,
 			kConst = 4,
 			kNormConst = 5,
+			kNormPdfBNoBins = 6,
+			kConstNoBins = 7,
+			kNormPdfBLambda = 8,
+			kNormPdfBNoBinsNoRangeLambda = 9,
+			kConstNoBinsNoRangeLambda = 10,
 		};
 		TFitResult AmuletFit(FuncType fType){
 			ChooseFormula(fType);
@@ -151,11 +157,78 @@ class AmuletFitCore {
 					_func->SetParameter("B",_h.GetBinContent(_h.FindBin(_rmax)));
 				}
 				break;
+				case FuncType::kNormPdfBLambda: //normalized pdf (two parameters)
+				{
+					formula = "kNormPdfBLambda";
+					const int nBins = NbinsInFitRange;
+					const int nEntr = NentriesInRange;
+					const double rmi = _rmin;
+					const double rma = _rmax;
+					const double biw = _binWdt;
+					_func = new TF1("decay_law",
+							[rmi,rma,biw,nBins,nEntr](double*x, double *p)->double{	
+								double tau = p[0];
+								double B = p[1];
+								double lambda = 1./tau;
+								double N = ((nEntr-B*nBins)*biw)/(exp(-rmi*lambda)-exp(-rma*lambda));
+								double signal = N*exponential_pdf(x[0],lambda); 
+								return signal + B; 
+							}, _rmin, _rmax, 2 );
+					_func->SetParNames("#tau","B");
+					_func->SetParameter("B",_h.GetBinContent(_h.FindBin(_rmax)));
+				}
+				case FuncType::kNormPdfBNoBins: //normalized pdf (two parameters)
+				{
+					string normexp = "(("+entrs+"-"+"[B])*("+binws+"))/(exp(-"+rmins+"*"+lambda+")-exp(-"+rmaxs+"*"+lambda+"))";
+					formula = "("+normexp+")*("+exppdf+")+([B]/"+nbins+")";
+					
+					_func = new TF1("decay_law", formula.c_str(), _rmin, _rmax, "NL");
+					_func->SetParameter("B",_h.GetBinContent(_h.FindBin(_rmax)*NbinsInFitRange));
+				}
+				case FuncType::kNormPdfBNoBinsNoRangeLambda: //normalized pdf (two parameters)
+				{
+					formula = "kNormPdfBNoBinsNoRangeLambda";
+					const int nBins = NbinsInFitRange;
+					const int nEntr = NentriesInRange;
+					const double rmi = _rmin;
+					const double rma = _rmax;
+					const double biw = _binWdt;
+					_func = new TF1("decay_law",
+							[rmi,rma,biw,nBins,nEntr](double*x, double *p)->double{	
+								double tau = p[0];
+								double B = p[1]*uniform_pdf(x[0],rmi,rma)/nBins;
+								double lambda = 1./tau;
+								double N = ((nEntr-B*nBins)*biw)/(exp(-rmi*lambda)-exp(-rma*lambda));
+								double signal = N*exponential_pdf(x[0],lambda); 
+								double bkg = B;
+								return signal + bkg; 
+							}, _rmin, _rmax, 2 );
+					_func->SetParNames("#tau","B");
+					_func->SetParameter("B",_h.GetBinContent(_h.FindBin(_rmax)));
+				}
+				break;
+				case FuncType::kConstNoBinsNoRangeLambda: //normalized pdf (two parameters)
+				{
+					formula = "kConstNoBinsNoRangeLambda";
+					const int nBins = NbinsInFitRange;
+					const int nEntr = NentriesInRange;
+					const double rmi = _rmin;
+					const double rma = _rmax;
+					const double biw = _binWdt;
+					_func = new TF1("decay_law",
+							[rmi,rma,biw,nBins,nEntr](double*x, double *p)->double{	
+								double B = p[0]*uniform_pdf(x[0],rmi,rma)/nBins;
+								return B; 
+							}, _rmin, _rmax, 1 );
+					_func->SetParNames("B");
+					_func->SetParameter("B",_h.GetBinContent(_h.FindBin(_rmax))*(rma-rmi)*nBins);
+				}
+				break;
 				case FuncType::kConst: //normalized pdf (two parameters)
 				{
 					formula = "[B]";
 					
-					_func = new TF1("decay_law", formula.c_str(), _rmin, _rmax, "NL");
+					_func = new TF1("bkg_law", formula.c_str(), _rmin, _rmax, "NL");
 					_func->SetParameter("B",_h.GetBinContent(_h.FindBin(_rmax)));
 				}
 				break;
@@ -163,8 +236,16 @@ class AmuletFitCore {
 				{
 					formula = "[B]*("+unipdf+")";
 					
-					_func = new TF1("decay_law", formula.c_str(), _rmin, _rmax, "NL");
+					_func = new TF1("bkg_law", formula.c_str(), _rmin, _rmax, "NL");
 					_func->SetParameter("B",_h.GetBinContent(_h.FindBin(_rmax)));
+				}
+				break;
+				case FuncType::kConstNoBins: //normalized pdf (two parameters)
+				{
+					formula = "[B]/("+nbins+")";
+					
+					_func = new TF1("bkg_law", formula.c_str(), _rmin, _rmax, "NL");
+					_func->SetParameter("B",_h.GetBinContent(_h.FindBin(_rmax)*NbinsInFitRange));
 				}
 				break;
 				case FuncType::kDefault: //non-normalized exponential decay + constant bkg
@@ -380,18 +461,32 @@ void WriteDecayTree(RNode dfUp, RNode dfDwn, TFile* f){
 	vector<double> dw_start_wdt = *dfDwn.Take<double>(startWdtVar);
 	vector<double> up_stop_wdt = *dfUp.Take<double>(stopWdtVar);
 	vector<double> dw_stop_wdt = *dfDwn.Take<double>(stopWdtVar);
+	vector<short int> upMeasN = *dfUp.Take<short int>("measN");
+	vector<short int> dwMeasN = *dfDwn.Take<short int>("measN");
+	vector<unsigned long long> upidx = *dfUp.Take<unsigned long long>("idx");
+	vector<unsigned long long> dwidx = *dfDwn.Take<unsigned long long>("idx");
+	vector<short int> upRunN = *dfUp.Take<short int>("runN");
+	vector<short int> dwRunN = *dfDwn.Take<short int>("runN");
 	double dt, startWdt, stopWdt;
+	short int runN, measN;
+       	unsigned long long idx;
 	bool topology; 
 	TTree tree("decays","decays");
 	tree.Branch("dt",&dt,"dt/D");
 	tree.Branch("topology",&topology,"topology/O");
 	tree.Branch("startWdt",&startWdt,"startWdt/D");
 	tree.Branch("stopWdt", &stopWdt, "stopWdt/D" );
+	tree.Branch("measN",&measN,"measN/B");
+	tree.Branch("idx", &idx, "idx/l" );
+	tree.Branch("runN",&runN, "runN/B");
 	{ 	long int i = 0;
 		for( const auto & updt : ups ){
 			dt = updt;
 			startWdt = up_start_wdt[i];
 			stopWdt = up_stop_wdt[i];
+			measN = upMeasN[i];
+			idx = upidx[i];
+			runN = upRunN[i];
 			topology = true;
 			i++;
 			tree.Fill();
@@ -402,6 +497,9 @@ void WriteDecayTree(RNode dfUp, RNode dfDwn, TFile* f){
 			dt = dwndt;
 			startWdt = dw_start_wdt[i];
 			stopWdt = dw_stop_wdt[i];
+			measN = dwMeasN[i];
+			idx = dwidx[i];
+			runN = dwRunN[i];
 			topology = false;
 			i++;
 			tree.Fill();
@@ -473,9 +571,9 @@ void WriteRangeStabilityFixedBins(RNode decaydf, double binWdt, int NitMin, int 
 	long double stopWdt = std::min(stopWdtUp,stopWdtDw);
 	long double startWdt = decaydf.Mean("startWdt").GetValue();
 	long double rmin_min = stopWdt + startWdt;
-	long double rmin_max =  10.5e-6;
+	long double rmin_max =  11e-6;
 	long double rmax_min = stopWdt + startWdt + 0.5e-6;
-	long double rmax_max =  10e-6;
+	long double rmax_max =  11.5e-6;
 	cout<<"Range stability: "<<endl;
 	cout<<"rmin min = "<<rmin_min<<"\t rmin max = "<<rmin_max<<endl;
 	cout<<"rmax min = "<<rmax_min<<"\t rmax max = "<<rmax_max<<endl<<endl;
@@ -526,14 +624,12 @@ void WriteRangeStabilityFixedBins(RNode decaydf, double binWdt, int NitMin, int 
 }
 
 //stability analysis: opt "B" for bin width fit stab, opt: "R" for range stab.
-void StabilityAnalysis(RNode decaydf, Option_t *opt, TString RootOut, AmuletFitCore::FuncType func_type){
+void StabilityAnalysis(RNode decaydf, Option_t *opt, TString RootOut, double rmin, double rmax, double binWdt, AmuletFitCore::FuncType func_type){
 	if( TString(opt).Contains("B")){
-		double rmin = 0.7e-6, rmax = 9.1e-6;
 		int N_iters = 100;
 		WriteBinNumberStabilityFixedRange(decaydf, rmin, rmax, N_iters, RootOut, func_type);
 	}	
 	if( TString(opt).Contains("R") ){
-		double binWdt = 20e-9;
 		int N_iters_min = 100;
 		int N_iters_max = 100;
 		WriteRangeStabilityFixedBins( decaydf, binWdt, N_iters_min, N_iters_max, RootOut, func_type);
@@ -614,35 +710,39 @@ int main(int argc, char** argv)
 	switch( measconf ){
 		case RunConfiguration::kCarbon:
 			binWdt = 20e-9; //opt
-			rmin = 0.5e-6;
-			rmax = 9.1e-6;
-			fType = AmuletFitCore::FuncType::kNormPdfB;
+			rmin = 0.7e-6;
+			rmax = 10e-6;
+			fType = AmuletFitCore::FuncType::kNormExpB;
 		break;	
 		case RunConfiguration::kAl:
-			binWdt = 20e-9;
+			binWdt = 40e-9; //opt?
 			rmin = 0.5e-6;
 			rmax = 9.1e-6;
+			fType = AmuletFitCore::FuncType::kNormExpB;
 		break;	
 		case RunConfiguration::kNaCl:
-			binWdt = 20e-9;
+			binWdt = 30e-9; //opt??
 			rmin = 0.5e-6;
 			rmax = 9.1e-6;
+			fType = AmuletFitCore::FuncType::kNormExpB;
 		break;	
 		case RunConfiguration::kBkg:
 			binWdt = 1.2e-7; //quella che sceglie in automatico il ttree
 			rmin = 30e-6; //scelta guardando plot
 			rmax = 38e-6; //scelta guardando plot
-			fType = AmuletFitCore::FuncType::kNormConst;
+			fType = AmuletFitCore::FuncType::kConstNoBinsNoRangeLambda;
 		break;	
 		case RunConfiguration::kBon:
-			binWdt = 20e-9;
+			binWdt = 60e-9; //opt?
 			rmin = 0.5e-6;
 			rmax = 9.1e-6;
+			fType = AmuletFitCore::FuncType::kNormExpB;
 		break;	
 		case RunConfiguration::kBoff:
-			binWdt = 20e-9;
+			binWdt = 60e-9; //opt?
 			rmin = 0.5e-6;
 			rmax = 9.1e-6;
+			fType = AmuletFitCore::FuncType::kNormExpB;
 		break;
 		case RunConfiguration::kRunNotPresent:
 			binWdt = 0;
@@ -669,7 +769,7 @@ int main(int argc, char** argv)
 
 	
 	if(measconf != RunConfiguration::kBkg)
-		StabilityAnalysis(decaydf, "B", RootOut, fType);
+		StabilityAnalysis(decaydf, "BR", RootOut, rmin, rmax, binWdt, fType);
 
 	WriteLifetimeFit(decaydf, RootOut, binWdt, rmin, rmax, fType);
 	
