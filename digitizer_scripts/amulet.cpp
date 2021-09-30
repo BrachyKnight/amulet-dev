@@ -66,6 +66,10 @@ enum class RunConfiguration : short int {
 
 long double MEASTIME;
 
+double NormExpRange( double t, double lambda, double rmin, double rmax){
+	return exponential_pdf(t,lambda)/(exp(-lambda*rmin)-exp(-lambda*rmax));
+}
+
 //core class for AMULET: Analysis MUon LifETime.
 //use AmuletFitCore in order to fit histogram h with one of the available functions
 class AmuletFitCore {
@@ -88,7 +92,8 @@ class AmuletFitCore {
 			kConst = 4,
 			kUniform = 5,
 			kNormExpNormB = 6,
-			kDefault=kNormExpB,
+			kMassimo1 = 7,
+			kDefault = 1,
 		};
 		TFitResult AmuletFit(FuncType fType){
 			ChooseFormula(fType);
@@ -107,6 +112,7 @@ class AmuletFitCore {
 		double _rmin, _rmax, _binWdt;
 		bool _status;
 		TF1* _func;
+
 		void ChooseFormula( FuncType fType ){
 			const long double rmi = _rmin, rma = _rmax, binw = _binWdt;
 			const long double meastime = MEASTIME;
@@ -166,6 +172,7 @@ class AmuletFitCore {
 					_func->SetParNames("#tau","b");
 					_func->SetParameter("b",_h.GetBinContent(_h.FindBin(_rmax)));
 				}
+				break;
 				case FuncType::kRoberto2: //normalized pdf (two parameters) [B represents N_bkg in fit range]
 				{
 					_func = new TF1("decay_law",
@@ -180,7 +187,26 @@ class AmuletFitCore {
 								return (t<=rma && t>=rmi) ? signal+bkg : 0.;
 							}, _rmin, _rmax, 2, "NL" );
 					_func->SetParNames("#tau","B");
-					_func->SetParameter("B",_h.GetBinContent(_h.FindBin(_rmax)));
+					_func->SetParameter("B",_h.GetBinContent(_h.FindBin(_rmax))*nbins);
+				}
+				break;
+				case FuncType::kMassimo1:
+				{
+					_func = new TF1("decay_law",
+							[meastime,rmi,rma,binw,nbins,nentr](double*x, double *p)->double{	
+								double tau = p[0];
+								double rate_cc = p[1];
+								double t = x[0];
+								double lambda = 1./tau;
+								double A = ((rma-rmi)*meastime)/nbins;
+								double rate_tot = nentr/meastime;
+								double signal = NormExpRange(t, lambda, rmi, rma); 
+								double bkg = uniform_pdf(t,rmi,rma);
+								double pdf = A*( (rate_tot-rate_cc)*signal + rate_cc*bkg  );
+								return (t<=rma && t>=rmi) ? pdf : 0.;
+							}, _rmin, _rmax, 2, "NL" );
+					_func->SetParNames("#tau","rcc");
+					_func->SetParameter("rcc",0.004);
 				}
 				break;
 				case FuncType::kConst: //normalized pdf (two parameters)
@@ -657,11 +683,11 @@ int main(int argc, char** argv)
 	auto measconf = ChooseConfig(RootOut);
 	switch( measconf ){
 		case RunConfiguration::kCarbon:
-			binWdt = 20e-9; //opt
-			rmin = 0.7e-6;
-			rmax = 10e-6;
-			MEASTIME = 3.0464e06;
-			fType = AmuletFitCore::FuncType::kDefault;
+			binWdt = 20e-9;  //opt
+			rmin = 500e-9;   //opt?
+			rmax = 10200e-9; //opt?
+			MEASTIME = 3.0464e06; //sigma?
+			fType = AmuletFitCore::FuncType::kNormExpB;
 		break;	
 		case RunConfiguration::kAl:
 			binWdt = 40e-9; //opt?
@@ -719,7 +745,7 @@ int main(int argc, char** argv)
 
 	
 	if(measconf != RunConfiguration::kBkg)
-		StabilityAnalysis(decaydf, "", RootOut, rmin, rmax, binWdt, fType );
+		StabilityAnalysis(decaydf, "B", RootOut, rmin, rmax, binWdt, fType );
 
 	WriteLifetimeFit(decaydf, RootOut, binWdt, rmin, rmax, fType);
 	
