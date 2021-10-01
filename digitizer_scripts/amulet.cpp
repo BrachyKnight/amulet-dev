@@ -33,7 +33,7 @@
 #include <TCanvas.h>
 #include <Math/PdfFunc.h> //exponential_pdf() //uniform_pdf()
 
-using ROOT::RDF::RNode, ROOT::RDataFrame, ROOT::VecOps::RVec, ROOT::Math::exponential_pdf, ROOT::Math::uniform_pdf;
+using ROOT::RDF::RNode, ROOT::RDataFrame, ROOT::VecOps::RVec, ROOT::Math::exponential_pdf;
 using std::vector, std::pair, std::runtime_error, std::cout, std::endl, std::string, std::map, std::make_pair, std::to_string;
 
 //struct representing a square signal: falling edge and rising edge 
@@ -68,8 +68,11 @@ long double MEASTIME;
 long double TAUP = 2.197e-6; 
 long double TAU_carbon = 2025e-9;
 
-double NormExpRange( double t, double lambda, double rmin, double rmax){
-	return exponential_pdf(t,lambda)/(exp(-lambda*rmin)-exp(-lambda*rmax));
+double NormExpRange( double x, double lambda, double rmin, double rmax){
+	return exponential_pdf(x,lambda)/(exp(-lambda*rmin)-exp(-lambda*rmax));
+}
+double uniform_pdf( double x, double rmin, double rmax ){
+	return ( ( rmax!=rmin && x<=rmax && x>=rmin ) ? 1.0/(rmax-rmin) : 0.0 );
 }
 
 //core class for AMULET: Analysis MUon LifETime.
@@ -80,7 +83,7 @@ class AmuletFitCore {
 		_rmin(rmin), _rmax(rmax)
 		{
 			if( !fitopt.Contains("S") )
-				fitopt+"S";
+				fitopt+="S";
 			_fitopt = fitopt;
 			_h = h;
 			_status = false;
@@ -97,6 +100,9 @@ class AmuletFitCore {
 			kMassimo1 = 7,
 			kMassimo2 = 8,
 			kMassimoFractionC = 9,
+			kMassimo1noT = 10,
+			kMassimo2noT = 11,
+			kMassimoFractionCnoT = 12,
 			kDefault = 1,
 		};
 		TFitResult AmuletFit(FuncType fType){
@@ -116,12 +122,11 @@ class AmuletFitCore {
 		double _rmin, _rmax, _binWdt;
 		bool _status;
 		TF1* _func;
-
 		void ChooseFormula( FuncType fType ){
-			const long double rmi = _rmin, rma = _rmax, binw = _binWdt;
+			const double rmi = _rmin, rma = _rmax, binw = _binWdt;
 			const long double meastime = MEASTIME;
-			const long double nbins = (long double)static_cast<int>(((rma-rmi)/binw));
-			const long double nentr = (long double)static_cast<long long int>((_h.Integral(_h.FindBin(_rmin),_h.FindBin(_rmax))));
+			const double nbins = static_cast<int>((rma-rmi)/binw);
+			const double nentr = static_cast<double>((_h.Integral(_h.FindBin(_rmin),_h.FindBin(_rmax))));
 			//list of the available functions
 			switch (fType) {
 				case FuncType::kNormExpB: //exponential pdf + const bkg
@@ -258,6 +263,65 @@ class AmuletFitCore {
 					_func->SetParameter(3, 0.5);
 				}
 				break;
+				case FuncType::kMassimo1noT:
+				{
+					_func = new TF1("decay_law",
+							[rmi,rma,binw,nbins,nentr](double*x, double *p)->double{	
+								double tau = p[0];
+								double nbkg = p[1];
+								double t = x[0];
+								double lambda = 1./tau;
+								double signal = NormExpRange(t, lambda, rmi, rma); 
+								double bkg = uniform_pdf(t,rmi,rma);
+								double pdf = binw*( (nentr-nbkg)*signal + nbkg*bkg  );
+								return (t<=rma && t>=rmi) ? pdf : 0.;
+							}, _rmin, _rmax, 2, "NL" );
+					_func->SetParNames("#tau","N_{bkg}");
+					_func->SetParameter("N_{bkg}",0.004*meastime);
+				}
+				break;
+				case FuncType::kMassimo2noT:
+				{
+					_func = new TF1("decay_law",
+							[rmi,rma,binw,nbins,nentr](double*x, double *p)->double{	
+								double tau = p[0];
+								double nbkg = p[1];
+								double ndecay = p[2];
+								double t = x[0];
+								double lambda = 1./tau;
+								double signal = NormExpRange(t, lambda, rmi, rma); 
+								double bkg = uniform_pdf(t,rmi,rma);
+								double pdf = binw*( ndecay*signal + nbkg*bkg  );
+								return (t<=rma && t>=rmi) ? pdf : 0.;
+							}, _rmin, _rmax, 3, "NL" );
+					_func->SetParNames("#tau","N_{bkg}","N_{decay}");
+					_func->SetParameter("N_{bkg}",0.004*meastime);
+					_func->SetParameter("N_{decay}",0.004*meastime);
+				}
+				break;
+				case FuncType::kMassimoFractionCnoT:
+				{
+					_func = new TF1("decay_law",
+							[rmi,rma,binw,nbins,nentr](double*x, double *p)->double{	
+								double tau_p = p[0];
+								double tau_m = p[1];
+								double nbkg = p[2];
+								double frac_m = p[3];
+								double t = x[0];
+								double lambda_p = 1./tau_p;
+								double lambda_m = 1./tau_m;
+								double signal = (1-frac_m)*NormExpRange(t, lambda_p, rmi, rma) + frac_m*NormExpRange(t, lambda_m, rmi, rma); 
+								double bkg = uniform_pdf(t,rmi,rma);
+								double pdf = binw*( (nentr-nbkg)*signal + nbkg*bkg  );
+								return (t<=rma && t>=rmi) ? pdf : 0.;
+							}, _rmin, _rmax, 4, "NL" );
+					_func->SetParNames("#tau_{#mu^{+}}","#tau_{#mu^{-}}","N_{bkg}","f_{#frac{#mu^{-}}{#mu}}");
+					_func->SetParameter("N_{bkg}",0.004*meastime);
+					_func->FixParameter(0, TAUP);
+					_func->FixParameter(1, TAU_carbon);
+					_func->SetParameter(3, 0.5);
+				}
+				break;
 				case FuncType::kConst: //normalized pdf (two parameters)
 				{	
 					_func = new TF1("decay_law",
@@ -281,7 +345,6 @@ class AmuletFitCore {
 				}
 				break;
 			}
-			//if( !((TString)_fitopt).Contains("Q") ) cout<<"using: "<<formula<<endl;
 		};
 };
 
@@ -549,19 +612,23 @@ void WriteBinNumberStabilityFixedRange(RNode decaydf, double rmin, double rmax, 
 	long double time_res_from_run11 = 2.179e-9;
 	long double binWdtMin = time_res_from_run11/10;
 	long double binWdtMax = 1e-6*2; //non ha senso mettere piu di cosi
-	//long double step = (binWdtMax-binWdtMin)/static_cast<long double>(N_iter);
 	auto exp_spaced = ExpList(binWdtMin, binWdtMax, N_iter);
-	auto gtau  = TGraphAsymmErrors(N_iter);
-	auto gchi2 = TGraph(N_iter);
+	auto gtau  = TGraphAsymmErrors();
+	auto gchi2 = TGraph();
+	auto gprob = TGraph();
 	TString name="BinWidthStability";
 	TString title="Bin width stability;Bin Width [ns];#tau_{#mu} [#mus]";
 	gtau.SetNameTitle(name+"_tau",title);
 	gchi2.SetNameTitle(name+"_chi2","#chi2 bin width stability;Bin Width [ns];#frac{#chi2}{NDF}");
-	for( int i = 0; i<N_iter; i++ ){
-		//long double binWdt = binWdtMin + static_cast<long double>(i)*step;
-		long double binWdt = exp_spaced[i];
-		int NbinsInFitRange = (rmax-rmin)/binWdt;
-		cout<<"iter: "<<i<<" of "<<N_iter<<"\twdt: "<<binWdt<<"\tN bins in fit range: "<<NbinsInFitRange<<endl;
+	gprob.SetNameTitle(name+"_prob","prob bin width stability;Bin Width [ns];prob [%]");
+	vector<int> nBinsVec(exp_spaced.size());
+	std::transform(exp_spaced.begin(),exp_spaced.end(),nBinsVec.begin(),[rmax,rmin](double bwdt)->int{return (rmax-rmin)/bwdt;});
+	auto last = std::unique(nBinsVec.begin(), nBinsVec.end());
+    	nBinsVec.erase(last, nBinsVec.end());
+	int i = 0;
+	for( const auto & NbinsInFitRange : nBinsVec ){
+		double binWdt = (rmax-rmin)/NbinsInFitRange;
+		cout<<"bin width: "<<binWdt<<" n bins in range: "<<NbinsInFitRange;
 		auto hs = GetDecayHistos(decaydf, binWdt, to_string(binWdt));
 		//auto hup = hs["up"], hdwn = hs["dwn"];
 		auto htot = hs["htot"];
@@ -570,12 +637,16 @@ void WriteBinNumberStabilityFixedRange(RNode decaydf, double rmin, double rmax, 
 		//fitres.Print("V");
 		auto tau_idx = fitcore.GetParIdx("#tau");
 		if( fitcore.GetStatus() ){
-			gtau.SetPoint(i, binWdt*1e9, fitres.Parameter(tau_idx)*1e6);
+			gtau.AddPoint(binWdt*1e9, fitres.Parameter(tau_idx)*1e6);
+			i++;
 			gtau.SetPointError(i, 0, 0, abs(fitres.LowerError(tau_idx))*1e6, fitres.UpperError(tau_idx)*1e6);
-			gchi2.SetPoint(i, binWdt*1e9, fitres.Chi2()/fitres.Ndf());
+			gchi2.AddPoint(binWdt*1e9, fitres.Chi2()/fitres.Ndf());
+			gprob.AddPoint(binWdt*1e9, fitres.Prob()*100);
+			cout<<" fit success! prob: "<<fitres.Prob()*100;
+			if (fitres.Prob()*100 > 5) cout<<" >5% !!!!!";
+			cout<<endl;
 		}else{
-			cout<<"Fit for bin wdt = "<<binWdt<<" has FAILED, "<<
-			"status: "<<fitres.Status()<<" valid: "<<fitres.IsValid()<<endl;
+			cout<<"Fit FAILED, status: "<<fitres.Status()<<" valid: "<<fitres.IsValid()<<endl;
 		}
 	}
 	TFile f(RootOut,"UPDATE");
@@ -584,6 +655,7 @@ void WriteBinNumberStabilityFixedRange(RNode decaydf, double rmin, double rmax, 
 	}else{
 		gtau.Write("",TObject::kOverwrite);
 		gchi2.Write("",TObject::kOverwrite);
+		gprob.Write("",TObject::kOverwrite);
 		f.Close();
 	}
 }
@@ -649,7 +721,7 @@ void WriteRangeStabilityFixedBins(RNode decaydf, double binWdt, int NitMin, int 
 //stability analysis: opt "B" for bin width fit stab, opt: "R" for range stab.
 void StabilityAnalysis(RNode decaydf, Option_t *opt, TString RootOut, double rmin, double rmax, double binWdt, AmuletFitCore::FuncType func_type){
 	if( TString(opt).Contains("B")){
-		int N_iters = 100;
+		int N_iters = 500;
 		WriteBinNumberStabilityFixedRange(decaydf, rmin, rmax, N_iters, RootOut, func_type);
 	}	
 	if( TString(opt).Contains("R") ){
@@ -668,6 +740,7 @@ void WriteLifetimeFit(RNode decaydf, TString RootOut, double binWdt, double rmin
 		auto fitcore = AmuletFitCore(htot,rmin,rmax,"LERS");
 		TFitResult fitres = fitcore.AmuletFit(func_type);
 		fitres.Print("V");
+		cout<<fitres.Prob()<<endl;
 		auto f = TFile(RootOut,"UPDATE");
 		auto c = TCanvas("decay_fit","decay_fit",500,500);
 		c.cd();
@@ -732,11 +805,11 @@ int main(int argc, char** argv)
 	auto measconf = ChooseConfig(RootOut);
 	switch( measconf ){
 		case RunConfiguration::kCarbon:
-			binWdt = 20e-9;  //opt
+			binWdt = 29.321e-9;  //opt
 			rmin = 500e-9;   //opt?
-			rmax = 10200e-9; //opt?
-			MEASTIME = 3.0464e06; //sigma?
-			fType = AmuletFitCore::FuncType::kMassimoFractionC;
+			rmax = 10e-6;    //opt?
+			MEASTIME = 3.0464e06;
+			fType = AmuletFitCore::FuncType::kMassimo1noT;
 		break;	
 		case RunConfiguration::kAl:
 			binWdt = 40e-9; //opt?
