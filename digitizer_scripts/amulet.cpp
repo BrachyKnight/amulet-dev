@@ -65,6 +65,8 @@ enum class RunConfiguration : short int {
 };
 
 long double MEASTIME;
+long double TAUP = 2.197e-6; 
+long double TAU_carbon = 2025e-9;
 
 double NormExpRange( double t, double lambda, double rmin, double rmax){
 	return exponential_pdf(t,lambda)/(exp(-lambda*rmin)-exp(-lambda*rmax));
@@ -93,6 +95,8 @@ class AmuletFitCore {
 			kUniform = 5,
 			kNormExpNormB = 6,
 			kMassimo1 = 7,
+			kMassimo2 = 8,
+			kMassimoFractionC = 9,
 			kDefault = 1,
 		};
 		TFitResult AmuletFit(FuncType fType){
@@ -205,8 +209,53 @@ class AmuletFitCore {
 								double pdf = A*( (rate_tot-rate_cc)*signal + rate_cc*bkg  );
 								return (t<=rma && t>=rmi) ? pdf : 0.;
 							}, _rmin, _rmax, 2, "NL" );
-					_func->SetParNames("#tau","rcc");
-					_func->SetParameter("rcc",0.004);
+					_func->SetParNames("#tau","r_{cc}");
+					_func->SetParameter("r_{cc}",0.004);
+				}
+				break;
+				case FuncType::kMassimo2:
+				{
+					_func = new TF1("decay_law",
+							[meastime,rmi,rma,binw,nbins,nentr](double*x, double *p)->double{	
+								double tau = p[0];
+								double rate_cc = p[1];
+								double rate_decay = p[2];
+								double t = x[0];
+								double lambda = 1./tau;
+								double A = ((rma-rmi)*meastime)/nbins;
+								double signal = NormExpRange(t, lambda, rmi, rma); 
+								double bkg = uniform_pdf(t,rmi,rma);
+								double pdf = A*( rate_decay*signal + rate_cc*bkg  );
+								return (t<=rma && t>=rmi) ? pdf : 0.;
+							}, _rmin, _rmax, 3, "NL" );
+					_func->SetParNames("#tau","r_{cc}","r_{decay}");
+					_func->SetParameter("r_{cc}",0.004);
+					_func->SetParameter("r_{decay}",0.004);
+				}
+				break;
+				case FuncType::kMassimoFractionC:
+				{
+					_func = new TF1("decay_law",
+							[meastime,rmi,rma,binw,nbins,nentr](double*x, double *p)->double{	
+								double tau_p = p[0];
+								double tau_m = p[1];
+								double rate_cc = p[2];
+								double frac_m = p[3];
+								double t = x[0];
+								double lambda_p = 1./tau_p;
+								double lambda_m = 1./tau_m;
+								double A = ((rma-rmi)*meastime)/nbins;
+								double rate_tot = nentr/meastime;
+								double signal = (1-frac_m)*NormExpRange(t, lambda_p, rmi, rma) + frac_m*NormExpRange(t, lambda_m, rmi, rma); 
+								double bkg = uniform_pdf(t,rmi,rma);
+								double pdf = A*( (rate_tot-rate_cc)*signal + rate_cc*bkg  );
+								return (t<=rma && t>=rmi) ? pdf : 0.;
+							}, _rmin, _rmax, 4, "NL" );
+					_func->SetParNames("#tau_{#mu^{+}}","#tau_{#mu^{-}}","r_{cc}","f_{#frac{#mu^{-}}{#mu}}");
+					_func->SetParameter("r_{cc}",0.004);
+					_func->FixParameter(0, TAUP);
+					_func->FixParameter(1, TAU_carbon);
+					_func->SetParameter(3, 0.5);
 				}
 				break;
 				case FuncType::kConst: //normalized pdf (two parameters)
@@ -687,7 +736,7 @@ int main(int argc, char** argv)
 			rmin = 500e-9;   //opt?
 			rmax = 10200e-9; //opt?
 			MEASTIME = 3.0464e06; //sigma?
-			fType = AmuletFitCore::FuncType::kNormExpB;
+			fType = AmuletFitCore::FuncType::kMassimoFractionC;
 		break;	
 		case RunConfiguration::kAl:
 			binWdt = 40e-9; //opt?
@@ -745,7 +794,7 @@ int main(int argc, char** argv)
 
 	
 	if(measconf != RunConfiguration::kBkg)
-		StabilityAnalysis(decaydf, "B", RootOut, rmin, rmax, binWdt, fType );
+		StabilityAnalysis(decaydf, "", RootOut, rmin, rmax, binWdt, fType );
 
 	WriteLifetimeFit(decaydf, RootOut, binWdt, rmin, rmax, fType);
 	
