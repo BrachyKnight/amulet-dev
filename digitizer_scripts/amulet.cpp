@@ -65,8 +65,11 @@ enum class RunConfiguration : short int {
 };
 
 long double MEASTIME;
+long double TAUMATERIAL;
 long double TAUP = 2.197e-6; 
 long double TAU_carbon = 2025e-9;
+long double TAU_Al = 880e-9;
+long double TAU_NaCl = 696e-9;
 
 double NormExpRange( double x, double lambda, double rmin, double rmax){
 	return exponential_pdf(x,lambda)/(exp(-lambda*rmin)-exp(-lambda*rmax));
@@ -92,18 +95,12 @@ class AmuletFitCore {
 		~AmuletFitCore(){ delete _func; };
 		enum class FuncType : short int{
 			kNormExpB = 1,
-			kRoberto1 = 2,
-			kRoberto2 = 3,
-			kConst = 4,
-			kUniform = 5,
-			kNormExpNormB = 6,
-			kMassimo1 = 7,
-			kMassimo2 = 8,
-			kMassimoFractionC = 9,
-			kMassimo1noT = 10,
-			kMassimo2noT = 11,
-			kMassimoFractionCnoT = 12,
-			kDefault = 1,
+			kConst = 2,
+			kUniform = 3,
+			kNormExpNormB = 4,
+			kMassimo = 5,
+			kMassimoFreeN = 6,
+			kMassimoFraction = 7,
 		};
 		TFitResult AmuletFit(FuncType fType){
 			ChooseFormula(fType);
@@ -165,105 +162,7 @@ class AmuletFitCore {
 					_func->SetParameter("N",_h.GetBinContent(_h.FindBin(_rmin))*(2.197e-6));
 				}
 				break;
-				case FuncType::kRoberto1: //normalized pdf (two parameters) [B represents N_bkg/nBins]
-				{
-					_func = new TF1("decay_law",
-							[rmi,rma,binw,nbins,nentr](double*x, double *p)->double{	
-								double tau = p[0];
-								double B = p[1];
-								double t = x[0];
-								double lambda = 1./tau;
-								double N = ((nentr-B*nbins)*binw)/(exp(-rmi*lambda)-exp(-rma*lambda));
-								double signal = N*exponential_pdf(t,lambda); 
-								double bkg = B;
-								return (t<=rma && t>=rmi) ? signal+bkg : 0.;
-							}, _rmin, _rmax, 2, "NL" );
-					_func->SetParNames("#tau","b");
-					_func->SetParameter("b",_h.GetBinContent(_h.FindBin(_rmax)));
-				}
-				break;
-				case FuncType::kRoberto2: //normalized pdf (two parameters) [B represents N_bkg in fit range]
-				{
-					_func = new TF1("decay_law",
-							[rmi,rma,binw,nbins,nentr](double*x, double *p)->double{	
-								double tau = p[0];
-								double B = p[1]/nbins;
-								double t = x[0];
-								double lambda = 1./tau;
-								double N = ((nentr-B*nbins)*binw)/(exp(-rmi*lambda)-exp(-rma*lambda));
-								double signal = N*exponential_pdf(t,lambda); 
-								double bkg = B;
-								return (t<=rma && t>=rmi) ? signal+bkg : 0.;
-							}, _rmin, _rmax, 2, "NL" );
-					_func->SetParNames("#tau","B");
-					_func->SetParameter("B",_h.GetBinContent(_h.FindBin(_rmax))*nbins);
-				}
-				break;
-				case FuncType::kMassimo1:
-				{
-					_func = new TF1("decay_law",
-							[meastime,rmi,rma,binw,nbins,nentr](double*x, double *p)->double{	
-								double tau = p[0];
-								double rate_cc = p[1];
-								double t = x[0];
-								double lambda = 1./tau;
-								double A = ((rma-rmi)*meastime)/nbins;
-								double rate_tot = nentr/meastime;
-								double signal = NormExpRange(t, lambda, rmi, rma); 
-								double bkg = uniform_pdf(t,rmi,rma);
-								double pdf = A*( (rate_tot-rate_cc)*signal + rate_cc*bkg  );
-								return (t<=rma && t>=rmi) ? pdf : 0.;
-							}, _rmin, _rmax, 2, "NL" );
-					_func->SetParNames("#tau","r_{cc}");
-					_func->SetParameter("r_{cc}",0.004);
-				}
-				break;
-				case FuncType::kMassimo2:
-				{
-					_func = new TF1("decay_law",
-							[meastime,rmi,rma,binw,nbins,nentr](double*x, double *p)->double{	
-								double tau = p[0];
-								double rate_cc = p[1];
-								double rate_decay = p[2];
-								double t = x[0];
-								double lambda = 1./tau;
-								double A = ((rma-rmi)*meastime)/nbins;
-								double signal = NormExpRange(t, lambda, rmi, rma); 
-								double bkg = uniform_pdf(t,rmi,rma);
-								double pdf = A*( rate_decay*signal + rate_cc*bkg  );
-								return (t<=rma && t>=rmi) ? pdf : 0.;
-							}, _rmin, _rmax, 3, "NL" );
-					_func->SetParNames("#tau","r_{cc}","r_{decay}");
-					_func->SetParameter("r_{cc}",0.004);
-					_func->SetParameter("r_{decay}",0.004);
-				}
-				break;
-				case FuncType::kMassimoFractionC:
-				{
-					_func = new TF1("decay_law",
-							[meastime,rmi,rma,binw,nbins,nentr](double*x, double *p)->double{	
-								double tau_p = p[0];
-								double tau_m = p[1];
-								double rate_cc = p[2];
-								double frac_m = p[3];
-								double t = x[0];
-								double lambda_p = 1./tau_p;
-								double lambda_m = 1./tau_m;
-								double A = ((rma-rmi)*meastime)/nbins;
-								double rate_tot = nentr/meastime;
-								double signal = (1-frac_m)*NormExpRange(t, lambda_p, rmi, rma) + frac_m*NormExpRange(t, lambda_m, rmi, rma); 
-								double bkg = uniform_pdf(t,rmi,rma);
-								double pdf = A*( (rate_tot-rate_cc)*signal + rate_cc*bkg  );
-								return (t<=rma && t>=rmi) ? pdf : 0.;
-							}, _rmin, _rmax, 4, "NL" );
-					_func->SetParNames("#tau_{#mu^{+}}","#tau_{#mu^{-}}","r_{cc}","f_{#frac{#mu^{-}}{#mu}}");
-					_func->SetParameter("r_{cc}",0.004);
-					_func->FixParameter(0, TAUP);
-					_func->FixParameter(1, TAU_carbon);
-					_func->SetParameter(3, 0.5);
-				}
-				break;
-				case FuncType::kMassimo1noT:
+				case FuncType::kMassimo:
 				{
 					_func = new TF1("decay_law",
 							[rmi,rma,binw,nbins,nentr](double*x, double *p)->double{	
@@ -280,7 +179,7 @@ class AmuletFitCore {
 					_func->SetParameter("N_{bkg}",0.004*meastime);
 				}
 				break;
-				case FuncType::kMassimo2noT:
+				case FuncType::kMassimoFreeN:
 				{
 					_func = new TF1("decay_law",
 							[rmi,rma,binw,nbins,nentr](double*x, double *p)->double{	
@@ -299,49 +198,48 @@ class AmuletFitCore {
 					_func->SetParameter("N_{decay}",0.004*meastime);
 				}
 				break;
-				case FuncType::kMassimoFractionCnoT:
+				case FuncType::kMassimoFraction:
 				{
 					_func = new TF1("decay_law",
 							[rmi,rma,binw,nbins,nentr](double*x, double *p)->double{	
-								double tau_p = p[0];
-								double tau_m = p[1];
-								double nbkg = p[2];
-								double frac_m = p[3];
+								double tau_p = p[0], lambda_p = 1./tau_p;
+								double tau_m = p[1], lambda_m = 1./tau_m;
+								double nbkg = p[2], frac_p = p[3];
 								double t = x[0];
-								double lambda_p = 1./tau_p;
-								double lambda_m = 1./tau_m;
-								double signal = (1-frac_m)*NormExpRange(t, lambda_p, rmi, rma) + frac_m*NormExpRange(t, lambda_m, rmi, rma); 
+								double signal = (1-frac_p)*NormExpRange(t, lambda_m, rmi, rma) + frac_p*NormExpRange(t, lambda_p, rmi, rma); 
 								double bkg = uniform_pdf(t,rmi,rma);
 								double pdf = binw*( (nentr-nbkg)*signal + nbkg*bkg  );
 								return (t<=rma && t>=rmi) ? pdf : 0.;
 							}, _rmin, _rmax, 4, "NL" );
-					_func->SetParNames("#tau_{#mu^{+}}","#tau_{#mu^{-}}","N_{bkg}","f_{#frac{#mu^{-}}{#mu}}");
+					_func->SetParNames("#tau_{#mu^{+}}","#tau_{#mu^{-}}","N_{bkg}","f_{#mu^{+}/#mu}");
 					_func->SetParameter("N_{bkg}",0.004*meastime);
 					_func->FixParameter(0, TAUP);
-					_func->FixParameter(1, TAU_carbon);
+					_func->FixParameter(1, TAUMATERIAL);
 					_func->SetParameter(3, 0.5);
 				}
 				break;
 				case FuncType::kConst: //normalized pdf (two parameters)
 				{	
-					_func = new TF1("decay_law",
+					_func = new TF1("bkg_law",
 							[rmi,rma](double*x, double *p)->double{	
-								double B = p[1];
+								double B = p[0];
 								double t = x[0];
-								return (t<rma && t>rmi) ? B : 0.;
+								return (t<=rma && t>=rmi) ? B : 0.;
 							}, _rmin, _rmax, 1, "NL" );
-					_func->SetParameter("b",_h.GetBinContent(_h.FindBin(_rmax)));
+					_func->SetParNames("b");
+					_func->SetParameter("b",_h.GetBinContent(_h.FindBin(_rmin+(_rmax-_rmin)/2.)));
 				}
 				break;
 				case FuncType::kUniform: //normalized pdf (two parameters)
 				{
-					_func = new TF1("decay_law",
+					_func = new TF1("bkg_law",
 							[rmi,rma](double*x, double *p)->double{	
-								double B = p[1];
+								double B = p[0];
 								double t = x[0];
-								return B*uniform_pdf(t,rmi,rma);
+								return (t<=rma && t>=rmi) ? B*uniform_pdf(t,rmi,rma) : 0.;
 							}, _rmin, _rmax, 1, "NL" );
-					_func->SetParameter("B",_h.GetBinContent(_h.FindBin(_rmax)));
+					_func->SetParNames("B");
+					_func->SetParameter("B",_h.GetBinContent(_h.FindBin(_rmax))*(rma-rmi));
 				}
 				break;
 			}
@@ -616,7 +514,7 @@ void WriteBinNumberStabilityFixedRange(RNode decaydf, double rmin, double rmax, 
 	auto gtau  = TGraphAsymmErrors();
 	auto gchi2 = TGraph();
 	auto gprob = TGraph();
-	TString name="BinWidthStability";
+	TString name="fType"+to_string(static_cast<short int>(func_type))+"BinWdtStab";
 	TString title="Bin width stability;Bin Width [ns];#tau_{#mu} [#mus]";
 	gtau.SetNameTitle(name+"_tau",title);
 	gchi2.SetNameTitle(name+"_chi2","#chi2 bin width stability;Bin Width [ns];#frac{#chi2}{NDF}");
@@ -665,7 +563,7 @@ void WriteRangeStabilityFixedBins(RNode decaydf, double binWdt, int NitMin, int 
 	long double stopWdtDw = decaydf.Filter("topology==0").Mean<double>("stopWdt").GetValue();
 	long double startWdt = decaydf.Mean<double>("startWdt").GetValue();
 	long double stopWdt = std::min(stopWdtUp,stopWdtDw);
-	long double rmin_min = stopWdt + startWdt - 500e-9;
+	long double rmin_min = stopWdt + startWdt - 150e-9;
 	long double rmin_max =  11e-6;
 	long double rmax_min = rmin_min + 500e-9;
 	long double rmax_max =  11.5e-6;
@@ -676,10 +574,10 @@ void WriteRangeStabilityFixedBins(RNode decaydf, double binWdt, int NitMin, int 
 	long double stepMax = (rmax_max-rmax_min)/static_cast<long double>(NitMax);
 	auto gtau  = TGraph2DErrors();
 	auto gchi2 = TGraph2D();
-	TString name="RangeStability";
+	TString name="fType"+to_string(static_cast<short int>(func_type))+"RangeStab";
 	TString title="Range stability;rmin [#mus];rmax [#mus]; #tau_{#mu} [#mus]";
-	gtau.SetNameTitle(name+"_tau",title);
-	gchi2.SetNameTitle(name+"_chi2","#chi2 range stability;rmin [#mus];rmax [#mus]; #frac{#chi2}{NDF}");
+	gtau.SetNameTitle(name+"Tau",title);
+	gchi2.SetNameTitle(name+"Chi2","#chi2 range stability;rmin [#mus];rmax [#mus]; #frac{#chi2}{NDF}");
 	int Npoint = 0;
 	for( int i = 0; i<NitMin; i++ ){
 		long double rmin = rmin_min + static_cast<long double>(i)*stepMin;
@@ -721,7 +619,7 @@ void WriteRangeStabilityFixedBins(RNode decaydf, double binWdt, int NitMin, int 
 //stability analysis: opt "B" for bin width fit stab, opt: "R" for range stab.
 void StabilityAnalysis(RNode decaydf, Option_t *opt, TString RootOut, double rmin, double rmax, double binWdt, AmuletFitCore::FuncType func_type){
 	if( TString(opt).Contains("B")){
-		int N_iters = 500;
+		int N_iters = 1000;
 		WriteBinNumberStabilityFixedRange(decaydf, rmin, rmax, N_iters, RootOut, func_type);
 	}	
 	if( TString(opt).Contains("R") ){
@@ -733,6 +631,13 @@ void StabilityAnalysis(RNode decaydf, Option_t *opt, TString RootOut, double rmi
 }
 
 void WriteLifetimeFit(RNode decaydf, TString RootOut, double binWdt, double rmin, double rmax, AmuletFitCore::FuncType func_type, const char* name_prefix = ""){
+		
+		cout<<"LIFETIME FIT for "<<RootOut<<endl;
+		cout<<"\tfType: "<<static_cast<short int>(func_type)<<endl;
+		cout<<"\tbWdt: "<<binWdt<<endl;
+		cout<<"\trmin: "<<rmin<<"\n\trmax: "<<rmax<<endl;
+		cout<<"\tn bins: "<<(rmax-rmin)/binWdt<<endl;
+	
 		gStyle->SetOptFit(1111);
 		auto hs = GetDecayHistos(decaydf, binWdt, name_prefix);
 		//auto hup = hs["up"], hdwn = hs["dwn"];
@@ -740,13 +645,28 @@ void WriteLifetimeFit(RNode decaydf, TString RootOut, double binWdt, double rmin
 		auto fitcore = AmuletFitCore(htot,rmin,rmax,"LERS");
 		TFitResult fitres = fitcore.AmuletFit(func_type);
 		fitres.Print("V");
-		cout<<fitres.Prob()<<endl;
+		cout<<"Chi2 prob (GoF): "<<fitres.Prob()*100<<endl;
 		auto f = TFile(RootOut,"UPDATE");
-		auto c = TCanvas("decay_fit","decay_fit",500,500);
+		TString name = "fType" + to_string(static_cast<short int>(func_type));
+		auto c = TCanvas("Fit","decay_fit",500,500);
 		c.cd();
 		fitcore.GetHistoClone()->Draw();
 		c.Write("",TObject::kOverwrite);
 		f.Close();
+}
+
+void WriteAsymmetry(RNode decaydf, TString RootOut, double binWdt, const char* name_prefix = ""){ //FIXME
+		
+		auto hs = GetDecayHistos(decaydf, binWdt, name_prefix);
+		auto hup = hs["up"];
+		auto hdwn = hs["dwn"];
+		auto hasymmetry = hup.GetAsymmetry((TH1*)hdwn.Clone());
+
+		auto f = TFile(RootOut,"UPDATE");
+		hasymmetry->Write("",TObject::kOverwrite);
+		f.Close();
+
+		delete hasymmetry;
 }
 
 RunConfiguration ChooseConfig(TString RootOut){
@@ -801,7 +721,7 @@ int main(int argc, char** argv)
 	}
 	
 	double binWdt = 0, rmin = 0, rmax = 0;
-	AmuletFitCore::FuncType fType = AmuletFitCore::FuncType::kDefault;
+	vector<AmuletFitCore::FuncType> fTypes;
 	auto measconf = ChooseConfig(RootOut);
 	switch( measconf ){
 		case RunConfiguration::kCarbon:
@@ -809,38 +729,54 @@ int main(int argc, char** argv)
 			rmin = 500e-9;   //opt?
 			rmax = 10e-6;    //opt?
 			MEASTIME = 3.0464e06;
-			fType = AmuletFitCore::FuncType::kMassimo1noT;
+			TAUMATERIAL = TAU_carbon;
+			fTypes.push_back(AmuletFitCore::FuncType::kMassimo);
+			fTypes.push_back(AmuletFitCore::FuncType::kMassimoFraction);
 		break;	
 		case RunConfiguration::kAl:
-			binWdt = 40e-9; //opt?
-			rmin = 0.5e-6;
-			rmax = 9.1e-6;
-			fType = AmuletFitCore::FuncType::kDefault;
+			binWdt = 40e-9; //TODO
+			rmin = 0.5e-6; //TODO
+			rmax = 9.1e-6; //TODO
+			MEASTIME = 3.0464e06; //TODO
+			TAUMATERIAL = TAU_Al;
+			fTypes.push_back(AmuletFitCore::FuncType::kMassimo);
+			fTypes.push_back(AmuletFitCore::FuncType::kMassimoFraction);
 		break;	
 		case RunConfiguration::kNaCl:
-			binWdt = 30e-9; //opt??
-			rmin = 0.5e-6;
-			rmax = 9.1e-6;
-			fType = AmuletFitCore::FuncType::kDefault;
+			binWdt = 30e-9; //TODO
+			rmin = 0.5e-6; //TODO
+			rmax = 9.1e-6; //TODO
+			MEASTIME = 3.0464e06; //TODO
+			TAUMATERIAL = TAU_NaCl;
+			fTypes.push_back(AmuletFitCore::FuncType::kMassimo);
+			fTypes.push_back(AmuletFitCore::FuncType::kMassimoFraction);
 		break;	
 		case RunConfiguration::kBkg:
 			binWdt = 1.2e-7; //quella che sceglie in automatico il ttree
 			rmin = 30e-6; //scelta guardando plot
 			rmax = 38e-6; //scelta guardando plot
 			MEASTIME = 1194420.;
-			fType = AmuletFitCore::FuncType::kConst;
+			TAUMATERIAL = 0;
+			fTypes.push_back(AmuletFitCore::FuncType::kUniform);
+			fTypes.push_back(AmuletFitCore::FuncType::kConst);
 		break;	
 		case RunConfiguration::kBon:
-			binWdt = 60e-9; //opt?
-			rmin = 0.5e-6;
-			rmax = 9.1e-6;
-			fType = AmuletFitCore::FuncType::kDefault;
+			binWdt = 60e-9; //TODO
+			rmin = 0.5e-6; //TODO
+			rmax = 9.1e-6; //TODO
+			MEASTIME = 3.0464e06; //TODO
+			TAUMATERIAL = TAU_carbon;
+			fTypes.push_back(AmuletFitCore::FuncType::kMassimo);
+			fTypes.push_back(AmuletFitCore::FuncType::kMassimoFraction);
 		break;	
 		case RunConfiguration::kBoff:
 			binWdt = 60e-9; //opt?
 			rmin = 0.5e-6;
 			rmax = 9.1e-6;
-			fType = AmuletFitCore::FuncType::kDefault;
+			MEASTIME = 3.0464e06; //TODO
+			TAUMATERIAL = TAU_carbon;
+			fTypes.push_back(AmuletFitCore::FuncType::kMassimo);
+			fTypes.push_back(AmuletFitCore::FuncType::kMassimoFraction);
 		break;
 		case RunConfiguration::kRunNotPresent:
 			binWdt = 0;
@@ -863,17 +799,20 @@ int main(int argc, char** argv)
 	WriteDecayHistos(res.at("up"), res.at("dwn"), outFile, binWdt, "filtered");
 	WriteDecayTree(res.at("up"), res.at("dwn"), outFile);
 	outFile->Close();
-	RDataFrame decaydf("decays",RootOut);
-
 	
+	RDataFrame decaydf("decays",RootOut);
+	
+	//WriteAsymmetry(decaydf, RootOut, binWdt);
 	if(measconf != RunConfiguration::kBkg)
-		StabilityAnalysis(decaydf, "", RootOut, rmin, rmax, binWdt, fType );
-
-	WriteLifetimeFit(decaydf, RootOut, binWdt, rmin, rmax, fType);
+		StabilityAnalysis(decaydf, "BR", RootOut, rmin, rmax, binWdt, fTypes[0] );
+	for( const auto & fType : fTypes ){
+		WriteLifetimeFit(decaydf, RootOut, binWdt, rmin, rmax, fType);
+	}
+		
 	
 	cout<<"File "<<RootOut<<" UPDATED"<<endl<<endl;
 	gROOT->EndOfProcessCleanups();
-	cout<<"term"<<endl;	
+	cout<<"term"<<endl<<endl;	
 	
 	return 0;
 }
