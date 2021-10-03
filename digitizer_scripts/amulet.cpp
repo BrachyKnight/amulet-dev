@@ -435,6 +435,34 @@ map<const char*, TH1D> GetDecayHistos(RNode df, double binWdt, TString name_pref
 	return {{"up",hup},{"dwn",hdwn},{"htot",htot}};
 }
 
+RunConfiguration ChooseConfig(TString RootOut){
+	if      ( RootOut.Contains("muLifetimeC.root")    )
+	       return RunConfiguration::kCarbon;
+	else if ( RootOut.Contains("muLifetimeAl.root")   )	
+		return RunConfiguration::kAl;
+	else if ( RootOut.Contains("muLifetimeNaCl.root") )
+		return RunConfiguration::kNaCl;
+	else if ( RootOut.Contains("muLifetimeBKG.root")  )
+		return RunConfiguration::kBkg;
+	else if ( RootOut.Contains("muLifetimeBon.root")  )
+		return RunConfiguration::kBon;
+	else if ( RootOut.Contains("muLifetimeBoff")      )
+		return RunConfiguration::kBoff;
+	else
+		return RunConfiguration::kRunNotPresent;
+}
+
+void ExportTxt(RNode decaydf, const char* var, TString RootOut){
+	auto v = decaydf.Take<double>(var);
+	auto TxtOut = RootOut.ReplaceAll(".root",".txt");
+	std::ofstream outxt ((const char*)TxtOut);
+	if (outxt.is_open()){
+		for ( const auto & d : v )
+			outxt<<d<<endl;
+	}
+       	else cout << "Unable to open file" <<endl;
+}
+
 void WriteDecayTree(RNode dfUp, RNode dfDwn, TFile* f){
 	std::string_view var = "Decay.dtFall";
 	auto ups = dfUp.Take<double>(var);
@@ -627,12 +655,12 @@ void WriteRangeStabilityFixedBins(RNode decaydf, double binWdt, int NitMin, int 
 //stability analysis: opt "B" for bin width fit stab, opt: "R" for range stab.
 void StabilityAnalysis(RNode decaydf, Option_t *opt, TString RootOut, double rmin, double rmax, double binWdt, AmuletFitCore::FuncType func_type){
 	if( TString(opt).Contains("B")){
-		int N_iters = 1000;
+		int N_iters = 500;
 		WriteBinNumberStabilityFixedRange(decaydf, rmin, rmax, N_iters, RootOut, func_type);
 	}	
 	if( TString(opt).Contains("R") ){
-		int N_iters_min = 25;
-		int N_iters_max = 25;
+		int N_iters_min = 100;
+		int N_iters_max = 100;
 		WriteRangeStabilityFixedBins( decaydf, binWdt, N_iters_min, N_iters_max, RootOut, func_type);
 
 	}
@@ -681,9 +709,13 @@ void WriteAsymmetry(RNode df, TString RootOut, double binWdt, vector<short int> 
 	TString name_prefix_old = name_prefix;
 	for( const auto & run : runs ){
 		name_prefix += "run"+to_string(run)+"_";
-		hup = *df.Filter("topology==1").Filter([run](int runN){return runN==run;},{"runN"}).Histo1D<double>({name_prefix+"UpDecay",name_prefix+"UpDecay;time [s];events per "+to_string(binWdt*1e06).substr(0,4)+" #mus",
+		hup = *df.Filter("topology==1")
+			 .Filter([run](int runN){return runN==run;},{"runN"})
+			 .Histo1D<double>({name_prefix+"UpDecay",name_prefix+"UpDecay;time [s];events per "+to_string(binWdt*1e06).substr(0,4)+" #mus",
 						static_cast<int>((max+0.1*max)/binWdt),0,max+0.1*max},	var);
-		hdwn = *df.Filter("topology==0").Filter([run](int runN){return runN==run;},{"runN"}).Histo1D<double>( {name_prefix+"DwnDecay",name_prefix+"DwnDecay;time [s];events per "+to_string(binWdt*1e06).substr(0,4)+" #mus",
+		hdwn = *df.Filter("topology==0")
+			  .Filter([run](int runN){return runN==run;},{"runN"})
+			  .Histo1D<double>( {name_prefix+"DwnDecay",name_prefix+"DwnDecay;time [s];events per "+to_string(binWdt*1e06).substr(0,4)+" #mus",
 						static_cast<int>((max+0.1*max)/binWdt),0,max+0.1*max},	var);
 
 		hasymmetry = hup.GetAsymmetry(&hdwn);
@@ -696,25 +728,8 @@ void WriteAsymmetry(RNode df, TString RootOut, double binWdt, vector<short int> 
 
 }
 
-RunConfiguration ChooseConfig(TString RootOut){
-	if      ( RootOut.Contains("muLifetimeC.root")    )
-	       return RunConfiguration::kCarbon;
-	else if ( RootOut.Contains("muLifetimeAl.root")   )	
-		return RunConfiguration::kAl;
-	else if ( RootOut.Contains("muLifetimeNaCl.root") )
-		return RunConfiguration::kNaCl;
-	else if ( RootOut.Contains("muLifetimeBKG.root")  )
-		return RunConfiguration::kBkg;
-	else if ( RootOut.Contains("muLifetimeBon.root")  )
-		return RunConfiguration::kBon;
-	else if ( RootOut.Contains("muLifetimeBoff")      )
-		return RunConfiguration::kBoff;
-	else
-		return RunConfiguration::kRunNotPresent;
-}
 
-int main(int argc, char** argv)
-{
+int main(int argc, char** argv){
 	//set names from input line
 	if ( !(argc >= 3) ){ 
 		std::cout<<"\nINPUT ERROR"<<endl
@@ -749,41 +764,43 @@ int main(int argc, char** argv)
 	
 	double binWdt = 0, rmin = 0, rmax = 0;
 	vector<AmuletFitCore::FuncType> fTypes;
+	AmuletFitCore::FuncType fStabType = AmuletFitCore::FuncType::kMassimo;
 	vector<short int> runs;
 	auto measconf = ChooseConfig(RootOut);
 	switch( measconf ){
 		case RunConfiguration::kCarbon:
-			binWdt = 29.321e-9;  //opt
-			rmin = 500e-9;       //opt
-			rmax = 10e-6;        //opt
+			binWdt = 29.321e-9;  //OPT
+			rmin = 500e-9;       //OPT
+			rmax = 10e-6;        //OPT
 			MEASTIME = 3.0464e06;
 			TAUMATERIAL = TAU_carbon;
 			runs = {1,5,7};
 			fTypes.push_back(AmuletFitCore::FuncType::kMassimo);
 			fTypes.push_back(AmuletFitCore::FuncType::kMassimoFraction);
+			fStabType = AmuletFitCore::FuncType::kMassimo;
 		break;	
 		case RunConfiguration::kAl:
 			binWdt = 40e-9; //TODO
-			rmin = 0.5e-6; //TODO
-			rmax = 9.1e-6; //TODO
-			MEASTIME = 3.0464e06; //TODO
+			rmin = 0.5e-6;  //TODO
+			rmax = 9.1e-6;  //TODO
+			MEASTIME = 1775700;
 			TAUMATERIAL = TAU_Al;
 			fTypes.push_back(AmuletFitCore::FuncType::kMassimo);
 			fTypes.push_back(AmuletFitCore::FuncType::kMassimoFraction);
 		break;	
 		case RunConfiguration::kNaCl:
 			binWdt = 30e-9; //TODO
-			rmin = 0.5e-6; //TODO
-			rmax = 9.1e-6; //TODO
-			MEASTIME = 3.0464e06; //TODO
+			rmin = 0.5e-6;  //TODO
+			rmax = 9.1e-6;  //TODO
+			MEASTIME = 2338100;
 			TAUMATERIAL = TAU_NaCl;
 			fTypes.push_back(AmuletFitCore::FuncType::kMassimo);
 			fTypes.push_back(AmuletFitCore::FuncType::kMassimoFraction);
 		break;	
 		case RunConfiguration::kBkg:
 			binWdt = 1.2e-7; //quella che sceglie in automatico il ttree
-			rmin = 30e-6; //scelta guardando plot
-			rmax = 38e-6; //scelta guardando plot
+			rmin = 30e-6;    //scelta guardando plot
+			rmax = 38e-6;    //scelta guardando plot
 			MEASTIME = 1194420.;
 			TAUMATERIAL = 0;
 			fTypes.push_back(AmuletFitCore::FuncType::kUniform);
@@ -791,18 +808,18 @@ int main(int argc, char** argv)
 		break;	
 		case RunConfiguration::kBon:
 			binWdt = 60e-9; //TODO
-			rmin = 0.5e-6; //TODO
-			rmax = 9.1e-6; //TODO
-			MEASTIME = 3.0464e06; //TODO
+			rmin = 0.5e-6;  //TODO
+			rmax = 9.1e-6;  //TODO
+			MEASTIME = 3115900;
 			TAUMATERIAL = TAU_carbon;
 			fTypes.push_back(AmuletFitCore::FuncType::kMassimo);
 			fTypes.push_back(AmuletFitCore::FuncType::kMassimoFraction);
 		break;	
 		case RunConfiguration::kBoff:
-			binWdt = 60e-9; //opt?
-			rmin = 0.5e-6;
-			rmax = 9.1e-6;
-			MEASTIME = 3.0464e06; //TODO
+			binWdt = 60e-9; //TODO
+			rmin = 0.5e-6;  //TODO
+			rmax = 9.1e-6;	//TODO
+			MEASTIME = 2935200;
 			TAUMATERIAL = TAU_carbon;
 			runs = {10,8};
 			fTypes.push_back(AmuletFitCore::FuncType::kMassimo);
@@ -832,10 +849,11 @@ int main(int argc, char** argv)
 	
 	RDataFrame decaydf("decays",RootOut);
 	
+	//ExportTxt(decaydf, "dt", RootOut);
 	if(measconf != RunConfiguration::kBkg)
-		StabilityAnalysis(decaydf, "", RootOut, rmin, rmax, binWdt, fTypes[0] );
+		StabilityAnalysis(decaydf, "BR", RootOut, rmin, rmax, binWdt, fStabType );
 	for( const auto & fType : fTypes ){
-		WriteLifetimeFit(decaydf, RootOut, binWdt, rmin, rmax, fType);
+		WriteLifetimeFit(decaydf, RootOut, 6.5e-7/3, rmin, rmax, fType);
 	}
 	WriteAsymmetry(decaydf, RootOut, binWdt, runs);
 		
