@@ -452,7 +452,7 @@ void WriteDecayTree(RNode dfUp, RNode dfDwn, TFile* f){
 	vector<short int> upRunN = *dfUp.Take<short int>("runN");
 	vector<short int> dwRunN = *dfDwn.Take<short int>("runN");
 	double dt, startWdt, stopWdt;
-	short int runN, measN;
+	int runN, measN;
        	unsigned long long idx;
 	bool topology; 
 	TTree tree("decays","decays");
@@ -460,9 +460,9 @@ void WriteDecayTree(RNode dfUp, RNode dfDwn, TFile* f){
 	tree.Branch("topology",&topology,"topology/O");
 	tree.Branch("startWdt",&startWdt,"startWdt/D");
 	tree.Branch("stopWdt", &stopWdt, "stopWdt/D" );
-	tree.Branch("measN",&measN,"measN/B");
+	tree.Branch("measN",&measN,"measN/I");
 	tree.Branch("idx", &idx, "idx/l" );
-	tree.Branch("runN",&runN, "runN/B");
+	tree.Branch("runN",&runN, "runN/I");
 	{ 	long int i = 0;
 		for( const auto & updt : ups ){
 			dt = updt;
@@ -536,10 +536,10 @@ void WriteBinNumberStabilityFixedRange(RNode decaydf, double rmin, double rmax, 
 		auto tau_idx = fitcore.GetParIdx("#tau");
 		if( fitcore.GetStatus() ){
 			gtau.AddPoint(binWdt*1e9, fitres.Parameter(tau_idx)*1e6);
-			i++;
 			gtau.SetPointError(i, 0, 0, abs(fitres.LowerError(tau_idx))*1e6, fitres.UpperError(tau_idx)*1e6);
 			gchi2.AddPoint(binWdt*1e9, fitres.Chi2()/fitres.Ndf());
 			gprob.AddPoint(binWdt*1e9, fitres.Prob()*100);
+			i++;
 			cout<<" fit success! prob: "<<fitres.Prob()*100;
 			if (fitres.Prob()*100 > 5) cout<<" >5% !!!!!";
 			cout<<endl;
@@ -558,7 +558,7 @@ void WriteBinNumberStabilityFixedRange(RNode decaydf, double rmin, double rmax, 
 	}
 }
 
-void WriteRangeStabilityFixedBins(RNode decaydf, double binWdt, int NitMin, int NitMax, TString RootOut, AmuletFitCore::FuncType func_type){
+void WriteRangeStabilityFixedBins(RNode decaydf, double binWdt, int NitMin, int NitMax, TString RootOut, AmuletFitCore::FuncType func_type, vector<double> limits = {}){
 	long double stopWdtUp = decaydf.Filter("topology==1").Mean<double>("stopWdt").GetValue();
 	long double stopWdtDw = decaydf.Filter("topology==0").Mean<double>("stopWdt").GetValue();
 	long double startWdt = decaydf.Mean<double>("startWdt").GetValue();
@@ -567,6 +567,15 @@ void WriteRangeStabilityFixedBins(RNode decaydf, double binWdt, int NitMin, int 
 	long double rmin_max =  11e-6;
 	long double rmax_min = rmin_min + 500e-9;
 	long double rmax_max =  11.5e-6;
+	TString name="fType"+to_string(static_cast<short int>(func_type))+"RangeStab";
+	if (limits.size() == 4){
+		rmin_min = limits[0];
+		rmin_max = limits[1];
+		rmax_min = limits[2];
+		rmax_max = limits[3];
+		for ( const auto & limit : limits)
+			name += "_"+to_string(limit*1e06);
+	}
 	cout<<"Range stability: "<<endl;
 	cout<<"rmin min = "<<rmin_min<<"\t rmin max = "<<rmin_max<<endl;
 	cout<<"rmax min = "<<rmax_min<<"\t rmax max = "<<rmax_max<<endl<<endl;
@@ -574,8 +583,7 @@ void WriteRangeStabilityFixedBins(RNode decaydf, double binWdt, int NitMin, int 
 	long double stepMax = (rmax_max-rmax_min)/static_cast<long double>(NitMax);
 	auto gtau  = TGraph2DErrors();
 	auto gchi2 = TGraph2D();
-	TString name="fType"+to_string(static_cast<short int>(func_type))+"RangeStab";
-	TString title="Range stability;rmin [#mus];rmax [#mus]; #tau_{#mu} [#mus]";
+	TString title="Range stability;t_{min} [#mus];t_{max} [#mus]; #tau_{#mu} [#mus]";
 	gtau.SetNameTitle(name+"Tau",title);
 	gchi2.SetNameTitle(name+"Chi2","#chi2 range stability;rmin [#mus];rmax [#mus]; #frac{#chi2}{NDF}");
 	int Npoint = 0;
@@ -597,9 +605,9 @@ void WriteRangeStabilityFixedBins(RNode decaydf, double binWdt, int NitMin, int 
 			auto tau_idx = fitcore.GetParIdx("#tau");
 			if( fitcore.GetStatus() ){
 				gtau.AddPoint(rmin*1e6, rmax*1e6, fitres.Parameter(tau_idx)*1e6);
-				Npoint++;
 				gtau.SetPointError(Npoint, 0, 0, fitres.Error(tau_idx)*1e6);
 				gchi2.AddPoint(rmin*1e6, rmax*1e6, fitres.Chi2()/fitres.Ndf());
+				Npoint++;
 			}else{
 				cout<<"Fit for rmin = "<<rmin<<" and rmax = "<<rmax<<" has FAILED, "<<
 				"status: "<<fitres.Status()<<" valid: "<<fitres.IsValid()<<endl;
@@ -623,8 +631,8 @@ void StabilityAnalysis(RNode decaydf, Option_t *opt, TString RootOut, double rmi
 		WriteBinNumberStabilityFixedRange(decaydf, rmin, rmax, N_iters, RootOut, func_type);
 	}	
 	if( TString(opt).Contains("R") ){
-		int N_iters_min = 100;
-		int N_iters_max = 100;
+		int N_iters_min = 25;
+		int N_iters_max = 25;
 		WriteRangeStabilityFixedBins( decaydf, binWdt, N_iters_min, N_iters_max, RootOut, func_type);
 
 	}
@@ -632,41 +640,60 @@ void StabilityAnalysis(RNode decaydf, Option_t *opt, TString RootOut, double rmi
 
 void WriteLifetimeFit(RNode decaydf, TString RootOut, double binWdt, double rmin, double rmax, AmuletFitCore::FuncType func_type, const char* name_prefix = ""){
 		
-		cout<<"LIFETIME FIT for "<<RootOut<<endl;
-		cout<<"\tfType: "<<static_cast<short int>(func_type)<<endl;
-		cout<<"\tbWdt: "<<binWdt<<endl;
-		cout<<"\trmin: "<<rmin<<"\n\trmax: "<<rmax<<endl;
-		cout<<"\tn bins: "<<(rmax-rmin)/binWdt<<endl;
-	
-		gStyle->SetOptFit(1111);
-		auto hs = GetDecayHistos(decaydf, binWdt, name_prefix);
-		//auto hup = hs["up"], hdwn = hs["dwn"];
-		auto htot = hs["htot"];
-		auto fitcore = AmuletFitCore(htot,rmin,rmax,"LERS");
-		TFitResult fitres = fitcore.AmuletFit(func_type);
-		fitres.Print("V");
-		cout<<"Chi2 prob (GoF): "<<fitres.Prob()*100<<endl;
-		auto f = TFile(RootOut,"UPDATE");
-		TString name = "fType" + to_string(static_cast<short int>(func_type));
-		auto c = TCanvas("Fit","decay_fit",500,500);
-		c.cd();
-		fitcore.GetHistoClone()->Draw();
-		c.Write("",TObject::kOverwrite);
-		f.Close();
+	cout<<"LIFETIME FIT for "<<RootOut<<endl;
+	cout<<"\tfType: "<<static_cast<short int>(func_type)<<endl;
+	cout<<"\tbWdt: "<<binWdt<<endl;
+	cout<<"\trmin: "<<rmin<<"\n\trmax: "<<rmax<<endl;
+	cout<<"\tn bins: "<<(rmax-rmin)/binWdt<<endl;
+
+	gStyle->SetOptFit(1111);
+	auto hs = GetDecayHistos(decaydf, binWdt, name_prefix);
+	//auto hup = hs["up"], hdwn = hs["dwn"];
+	auto htot = hs["htot"];
+	auto fitcore = AmuletFitCore(htot,rmin,rmax,"LERS");
+	TFitResult fitres = fitcore.AmuletFit(func_type);
+	fitres.Print("V");
+	cout<<"Chi2 prob (GoF): "<<fitres.Prob()*100<<endl;
+	auto f = TFile(RootOut,"UPDATE");
+	TString name = "DecayFit_fType" + to_string(static_cast<short int>(func_type));
+	auto c = TCanvas(name,"decay_fit",500,500);
+	c.cd();
+	fitcore.GetHistoClone()->Draw();
+	c.Write("",TObject::kOverwrite);
+	f.Close();
 }
 
-void WriteAsymmetry(RNode decaydf, TString RootOut, double binWdt, const char* name_prefix = ""){ //FIXME
-		
-		auto hs = GetDecayHistos(decaydf, binWdt, name_prefix);
-		auto hup = hs["up"];
-		auto hdwn = hs["dwn"];
-		auto hasymmetry = hup.GetAsymmetry((TH1*)hdwn.Clone());
+void WriteAsymmetry(RNode df, TString RootOut, double binWdt, vector<short int> runs = {}, TString name_prefix = "Asymm"){ //FIXME
+	auto f = TFile(RootOut,"UPDATE");
+	const char* var = "dt";
+	double maxup = df.Filter("topology==1").Max<double>(var).GetValue();
+	double maxdw = df.Filter("topology==0").Max<double>(var).GetValue();
+	double max = std::max(maxup,maxdw);
+	TH1D hup = *df.Filter("topology==1").Histo1D<double>(	{name_prefix+"UpDecay",name_prefix+"UpDecay;time [s];events per "+to_string(binWdt*1e06).substr(0,4)+" #mus",
+					static_cast<int>((max+0.1*max)/binWdt),0,max+0.1*max},	var);
+	TH1D hdwn = *df.Filter("topology==0").Histo1D<double>( {name_prefix+"DwnDecay",name_prefix+"DwnDecay;time [s];events per "+to_string(binWdt*1e06).substr(0,4)+" #mus",
+					static_cast<int>((max+0.1*max)/binWdt),0,max+0.1*max},	var);
 
-		auto f = TFile(RootOut,"UPDATE");
+	auto hasymmetry = hup.GetAsymmetry(&hdwn);
+	hasymmetry->Write("",TObject::kOverwrite);
+	delete hasymmetry;
+	
+	TString name_prefix_old = name_prefix;
+	for( const auto & run : runs ){
+		name_prefix += "run"+to_string(run)+"_";
+		hup = *df.Filter("topology==1").Filter([run](int runN){return runN==run;},{"runN"}).Histo1D<double>({name_prefix+"UpDecay",name_prefix+"UpDecay;time [s];events per "+to_string(binWdt*1e06).substr(0,4)+" #mus",
+						static_cast<int>((max+0.1*max)/binWdt),0,max+0.1*max},	var);
+		hdwn = *df.Filter("topology==0").Filter([run](int runN){return runN==run;},{"runN"}).Histo1D<double>( {name_prefix+"DwnDecay",name_prefix+"DwnDecay;time [s];events per "+to_string(binWdt*1e06).substr(0,4)+" #mus",
+						static_cast<int>((max+0.1*max)/binWdt),0,max+0.1*max},	var);
+
+		hasymmetry = hup.GetAsymmetry(&hdwn);
 		hasymmetry->Write("",TObject::kOverwrite);
-		f.Close();
-
 		delete hasymmetry;
+		name_prefix = name_prefix_old;	
+	}
+	
+	f.Close();
+
 }
 
 RunConfiguration ChooseConfig(TString RootOut){
@@ -722,14 +749,16 @@ int main(int argc, char** argv)
 	
 	double binWdt = 0, rmin = 0, rmax = 0;
 	vector<AmuletFitCore::FuncType> fTypes;
+	vector<short int> runs;
 	auto measconf = ChooseConfig(RootOut);
 	switch( measconf ){
 		case RunConfiguration::kCarbon:
 			binWdt = 29.321e-9;  //opt
-			rmin = 500e-9;   //opt?
-			rmax = 10e-6;    //opt?
+			rmin = 500e-9;       //opt
+			rmax = 10e-6;        //opt
 			MEASTIME = 3.0464e06;
 			TAUMATERIAL = TAU_carbon;
+			runs = {1,5,7};
 			fTypes.push_back(AmuletFitCore::FuncType::kMassimo);
 			fTypes.push_back(AmuletFitCore::FuncType::kMassimoFraction);
 		break;	
@@ -775,6 +804,7 @@ int main(int argc, char** argv)
 			rmax = 9.1e-6;
 			MEASTIME = 3.0464e06; //TODO
 			TAUMATERIAL = TAU_carbon;
+			runs = {10,8};
 			fTypes.push_back(AmuletFitCore::FuncType::kMassimo);
 			fTypes.push_back(AmuletFitCore::FuncType::kMassimoFraction);
 		break;
@@ -802,12 +832,12 @@ int main(int argc, char** argv)
 	
 	RDataFrame decaydf("decays",RootOut);
 	
-	//WriteAsymmetry(decaydf, RootOut, binWdt);
 	if(measconf != RunConfiguration::kBkg)
-		StabilityAnalysis(decaydf, "BR", RootOut, rmin, rmax, binWdt, fTypes[0] );
+		StabilityAnalysis(decaydf, "", RootOut, rmin, rmax, binWdt, fTypes[0] );
 	for( const auto & fType : fTypes ){
 		WriteLifetimeFit(decaydf, RootOut, binWdt, rmin, rmax, fType);
 	}
+	WriteAsymmetry(decaydf, RootOut, binWdt, runs);
 		
 	
 	cout<<"File "<<RootOut<<" UPDATED"<<endl<<endl;
