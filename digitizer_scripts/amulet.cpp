@@ -101,12 +101,7 @@ class AmuletFitCore {
 			kMassimo = 5,
 			kMassimoFreeN = 6,
 			kMassimoFraction = 7,
-			kMaterialFraction = 8,
-			kMaterialFraction1 = 9,
-			kMaterialFraction2 = 10,
-			kMaterial = 11,
-			kMaterial1 = 12,
-			kMaterial2 = 13,
+			kMaterial = 8,
 		};
 		TFitResult AmuletFit(FuncType fType){
 			ChooseFormula(fType);
@@ -207,12 +202,12 @@ class AmuletFitCore {
 				case FuncType::kMassimoFraction:
 				{
 					_func = new TF1("decay_law",
-							[rmi,rma,binw,nbins,nentr](double*x, double *p)->double{	
+							[rmi,rma,binw,nbins,nentr](double*x, double *p)->double{
 								double tau_p = p[0], lambda_p = 1./tau_p;
 								double tau_m = p[1], lambda_m = 1./tau_m;
 								double nbkg = p[2], frac_p = p[3];
 								double t = x[0];
-								double signal = (1-frac_p)*NormExpRange(t, lambda_m, rmi, rma) + frac_p*NormExpRange(t, lambda_p, rmi, rma); 
+								double signal = (1-frac_p)*NormExpRange(t, lambda_m, rmi, rma) + frac_p*NormExpRange(t, lambda_p, rmi, rma);
 								double bkg = uniform_pdf(t,rmi,rma);
 								double pdf = binw*( (nentr-nbkg)*signal + nbkg*bkg  );
 								return (t<=rma && t>=rmi) ? pdf : 0.;
@@ -224,158 +219,34 @@ class AmuletFitCore {
 					_func->SetParameter(3, 0.5);
 				}
 				break;
-				case FuncType::kMaterialFraction:
-				{
-					_func = new TF1("decay_law",
-							[rmi,rma,binw,nbins,nentr](double*x, double *p)->double{	
-								double tau_p = p[0], lambda_p = 1./tau_p;
-								double tau_C = p[1], lambda_C = 1./tau_C;
-								double tau_M = p[2], lambda_M = 1./tau_M;
-								double f_plus= p[3], f_C = p[4], f_Mat = p[5];
-								double t = x[0];
-								double mu_p = f_plus*NormExpRange(t, lambda_p, rmi, rma);
-								double mu_C = f_C*NormExpRange(t, lambda_C, rmi, rma);
-								double mu_Mat = f_Mat*NormExpRange(t, lambda_M, rmi, rma); 
-								double bkg = (1.-(f_plus+f_C+f_Mat))*uniform_pdf(t,rmi,rma);
-								double pdf = binw*nentr*( mu_p + mu_C + mu_Mat + bkg );
-								return (t<=rma && t>=rmi) ? pdf : 0.;
-							}, _rmin, _rmax, 6, "NL" );
-					_func->SetParNames("#tau_{#mu^{+}}","#tau_{#mu^{-}}_{C}","#tau_{#mu^{-}}_{mat}","f_{#mu^{+}}","f_{#mu^{-}}_{C}","f_{#mu^{-}}_{mat}");
-					_func->FixParameter(0, TAUP);
-					_func->FixParameter(1, TAU_carbon);
-					_func->FixParameter(2, TAUMATERIAL);
-					_func->SetParameter(3, 0.54);
-					_func->SetParameter(4, 0.26);
-					_func->SetParameter(5, 0.1);
-				}
-				break;
-				case FuncType::kMaterialFraction1:
-				{
-					_func = new TF1("decay_law",
-							[rmi,rma,binw,nbins,nentr](double*x, double *p)->double{	
-								double tau_p = p[0], lambda_p = 1./tau_p;
-								double tau_C = p[1], lambda_C = 1./tau_C;
-								double tau_M = p[2], lambda_M = 1./tau_M;
-								double f_bkg= p[3], f_C = p[4], f_Mat = p[5];
-								double t = x[0];
-								double mu_p = (1.-(f_bkg + f_C + f_Mat))*NormExpRange(t, lambda_p, rmi, rma);
-								double mu_C = f_C*NormExpRange(t, lambda_C, rmi, rma);
-								double mu_Mat = f_Mat*NormExpRange(t, lambda_M, rmi, rma); 
-								double bkg = f_bkg*uniform_pdf(t,rmi,rma);
-								double pdf = binw*nentr*( mu_p + mu_C + mu_Mat + bkg );
-								return (t<=rma && t>=rmi) ? pdf : 0.;
-							}, _rmin, _rmax, 6, "NL" );
-					_func->SetParNames("#tau_{#mu^{+}}","#tau_{#mu^{-}}_{C}","#tau_{#mu^{-}}_{mat}","f_{bkg}","f_{#mu^{-}}_{C}","f_{#mu^{-}}_{mat}");
-					_func->FixParameter(0, TAUP);
-					_func->FixParameter(1, TAU_carbon);
-					_func->FixParameter(2, TAUMATERIAL);
-					_func->SetParameter(3, 0.004*meastime/nentr);
-					_func->SetParameter(4, 0.26);
-					_func->SetParameter(5, 0.1);
-				}
-				break;
-				case FuncType::kMaterialFraction2:
-				{
-					_func = new TF1("decay_law",
-							[rmi,rma,binw,nbins,nentr](double*x, double *p)->double{	
-								double tau_p = p[0], lambda_p = 1./tau_p;
-								double tau_C = p[1], lambda_C = 1./tau_C;
-								double tau_M = p[2], lambda_M = 1./tau_M;
-								double f_bkg= p[3], f_p = p[4], f_Mat = p[5];
-								double t = x[0];
-								double mu_p = f_p*NormExpRange(t, lambda_p, rmi, rma);
-								double mu_C = (1.-(f_bkg + f_p + f_Mat))*NormExpRange(t, lambda_C, rmi, rma);
-								double mu_Mat = f_Mat*NormExpRange(t, lambda_M, rmi, rma); 
-								double bkg = f_bkg*uniform_pdf(t,rmi,rma);
-								double pdf = binw*nentr*( mu_p + mu_C + mu_Mat + bkg );
-								return (t<=rma && t>=rmi) ? pdf : 0.;
-							}, _rmin, _rmax, 6, "NL" );
-					_func->SetParNames("#tau_{#mu^{+}}","#tau_{#mu^{-}}_{C}","#tau_{#mu^{-}}_{mat}","f_{bkg}","f_{#mu^{-}}_{p}","f_{#mu^{-}}_{mat}");
-					_func->FixParameter(0, TAUP);
-					_func->FixParameter(1, TAU_carbon);
-					_func->FixParameter(2, TAUMATERIAL);
-					_func->SetParameter(3, 0.004*meastime/nentr);
-					_func->SetParameter(4, 0.5);
-					_func->SetParameter(5, 0.1);
-				}
-				break;
 				case FuncType::kMaterial:
 				{
 					_func = new TF1("decay_law",
 							[rmi,rma,binw,nbins,nentr](double*x, double *p)->double{	
-								double tau_p = p[0], lambda_p = 1./tau_p;
-								double tau_C = p[1], lambda_C = 1./tau_C;
-								double tau_M = p[2], lambda_M = 1./tau_M;
-								double f_plus= p[3], f_C = p[4], f_Mat = p[5];
-								double t = x[0];
-								double mu_p = f_plus*NormExpRange(t, lambda_p, rmi, rma);
-								double mu_C = f_C*NormExpRange(t, lambda_C, rmi, rma);
-								double mu_Mat = f_Mat*NormExpRange(t, lambda_M, rmi, rma); 
-								double bkg = (1.-(f_plus+f_C+f_Mat))*uniform_pdf(t,rmi,rma);
-								double pdf = binw*nentr*( mu_p + mu_C + mu_Mat + bkg );
+								double tau_p  = p[0], lambda_p = 1./tau_p;
+								double tau_C  = p[1], lambda_C = 1./tau_C;
+								double tau_M  = p[2], lambda_M = 1./tau_M;
+								double nbkg   = p[3];
+								double f_p    = p[4];
+								double f_Mat  = p[5];
+								double t      = x[0];
+								double mu_p   = NormExpRange(t, lambda_p, rmi, rma);
+								double mu_C   = NormExpRange(t, lambda_C, rmi, rma);
+								double mu_Mat = NormExpRange(t, lambda_M, rmi, rma);
+								double signal = f_p*mu_p + f_Mat*mu_Mat + (1.-(f_Mat+f_p))*mu_C;
+								double bkg    = uniform_pdf(t,rmi,rma);
+								double pdf    = binw*( (nentr-nbkg)*signal + nbkg*bkg  );
 								return (t<=rma && t>=rmi) ? pdf : 0.;
 							}, _rmin, _rmax, 6, "NL" );
-					_func->SetParNames("#tau_{#mu^{+}}","#tau_{#mu^{-}}_{C}","#tau_{#mu^{-}}_{mat}","f_{#mu^{+}}","f_{#mu^{-}}_{C}","f_{#mu^{-}}_{mat}");
+					_func->SetParNames("#tau_{#mu^{+}}","#tau_{#mu^{-}}_{C}","#tau_{#mu^{-}}_{mat}","N_{bkg}","f_{#mu^{+}}","f_{#mu^{-}}_{mat}");
 					_func->FixParameter(0, TAUP);
 					_func->FixParameter(1, TAU_carbon);
 					_func->SetParameter(2, TAUMATERIAL);
-					_func->SetParameter(3, 0.54);
-					_func->SetParameter(4, 0.26);
-					_func->SetParameter(5, 0.1);
-				}
-				break;
-				case FuncType::kMaterial1:
-				{
-					_func = new TF1("decay_law",
-							[rmi,rma,binw,nbins,nentr](double*x, double *p)->double{	
-								double tau_p = p[0], lambda_p = 1./tau_p;
-								double tau_C = p[1], lambda_C = 1./tau_C;
-								double tau_M = p[2], lambda_M = 1./tau_M;
-								double f_bkg= p[3], f_C = p[4], f_Mat = p[5];
-								double t = x[0];
-								double mu_p = (1.-(f_bkg + f_C + f_Mat))*NormExpRange(t, lambda_p, rmi, rma);
-								double mu_C = f_C*NormExpRange(t, lambda_C, rmi, rma);
-								double mu_Mat = f_Mat*NormExpRange(t, lambda_M, rmi, rma); 
-								double bkg = f_bkg*uniform_pdf(t,rmi,rma);
-								double pdf = binw*nentr*( mu_p + mu_C + mu_Mat + bkg );
-								return (t<=rma && t>=rmi) ? pdf : 0.;
-							}, _rmin, _rmax, 6, "NL" );
-					_func->SetParNames("#tau_{#mu^{+}}","#tau_{#mu^{-}}_{C}","#tau_{#mu^{-}}_{mat}","f_{bkg}","f_{#mu^{-}}_{C}","f_{#mu^{-}}_{mat}");
-					_func->FixParameter(0, TAUP);
-					_func->FixParameter(1, TAU_carbon);
-					_func->SetParameter(2, TAUMATERIAL);
-					_func->SetParameter(3, 0.004*meastime/nentr);
-					_func->SetParameter(4, 0.26);
-					_func->SetParameter(5, 0.1);
-				}
-				break;
-				case FuncType::kMaterial2:
-				{
-					_func = new TF1("decay_law",
-							[rmi,rma,binw,nbins,nentr](double*x, double *p)->double{	
-								double tau_p = p[0], lambda_p = 1./tau_p;
-								double tau_C = p[1], lambda_C = 1./tau_C;
-								double tau_M = p[2], lambda_M = 1./tau_M;
-								double f_bkg= p[3], f_p = p[4], f_Mat = p[5];
-								double t = x[0];
-								double mu_p = f_p*NormExpRange(t, lambda_p, rmi, rma);
-								double mu_C = (1.-(f_bkg + f_p + f_Mat))*NormExpRange(t, lambda_C, rmi, rma);
-								double mu_Mat = f_Mat*NormExpRange(t, lambda_M, rmi, rma); 
-								double bkg = f_bkg*uniform_pdf(t,rmi,rma);
-								double pdf = binw*nentr*( mu_p + mu_C + mu_Mat + bkg );
-								return (t<=rma && t>=rmi) ? pdf : 0.;
-							}, _rmin, _rmax, 6, "NL" );
-					_func->SetParNames("#tau_{#mu^{+}}","#tau_{#mu^{-}}_{C}","#tau_{#mu^{-}}_{mat}","f_{bkg}","f_{#mu^{-}}_{p}","f_{#mu^{-}}_{mat}");
-					_func->FixParameter(0, TAUP);
-					_func->FixParameter(1, TAU_carbon);
-					_func->SetParameter(2, TAUMATERIAL);
-					_func->SetParameter(3, 0.004*meastime/nentr);
-					_func->SetParameter(4, 0.5);
+					_func->SetParameter(3, 0.004*meastime);
+					_func->FixParameter(4, 0.5376);
+					_func->SetParError (4, 0.084); //TODO??
 					_func->SetParameter(5, 0.1);
 
-					_func->SetParLimits(3, 0.0,  0.2); 
-					_func->SetParLimits(4, 0.05, 1.0);
-					_func->SetParLimits(5, 0.05, 1.0);
 				}
 				break;
 				case FuncType::kConst: //normalized pdf (two parameters)
@@ -943,29 +814,19 @@ int main(int argc, char** argv){
 		case RunConfiguration::kAl:
 			binWdt = 45e-9; //TODO
 			rmin = 500e-9;  //TODO
-			rmax = 10e-6;  //TODO
+			rmax = 10e-6;   //TODO
 			MEASTIME = 1775700;
 			TAUMATERIAL = TAU_Al;
-			fTypes.push_back(AmuletFitCore::FuncType::kMaterialFraction1);
-			fTypes.push_back(AmuletFitCore::FuncType::kMaterialFraction1);
-			fTypes.push_back(AmuletFitCore::FuncType::kMaterialFraction2);
 			fTypes.push_back(AmuletFitCore::FuncType::kMaterial);
-			fTypes.push_back(AmuletFitCore::FuncType::kMaterial1);
-			fTypes.push_back(AmuletFitCore::FuncType::kMaterial2);
 			fTypes.push_back(AmuletFitCore::FuncType::kMassimo);
 		break;	
 		case RunConfiguration::kNaCl:
 			binWdt = 30e-9; //TODO
 			rmin = 0.5e-6;  //TODO
-			rmax = 9.1e-6;  //TODO
+			rmax = 8.7e-6;  //TODO
 			MEASTIME = 2338100;
 			TAUMATERIAL = TAU_NaCl;
-			fTypes.push_back(AmuletFitCore::FuncType::kMaterialFraction);
-			fTypes.push_back(AmuletFitCore::FuncType::kMaterialFraction1);
-			fTypes.push_back(AmuletFitCore::FuncType::kMaterialFraction2);
 			fTypes.push_back(AmuletFitCore::FuncType::kMaterial);
-			fTypes.push_back(AmuletFitCore::FuncType::kMaterial1);
-			fTypes.push_back(AmuletFitCore::FuncType::kMaterial2);
 			fTypes.push_back(AmuletFitCore::FuncType::kMassimo);
 		break;	
 		case RunConfiguration::kBkg:
@@ -1023,15 +884,13 @@ int main(int argc, char** argv){
 	//ExportTxt(decaydf, "dt", RootOut);
 	if(measconf != RunConfiguration::kBkg)
 		StabilityAnalysis(decaydf, "", RootOut, rmin, rmax, binWdt, fStabType );
-	for( const auto & fType : fTypes ){
+	for( const auto & fType : fTypes )
 		WriteLifetimeFit(decaydf, RootOut, binWdt, rmin, rmax, fType);
-	}
+	
 	WriteAsymmetry(decaydf, RootOut, 6.5e-7/3, runs);
 		
 	
 	cout<<"File "<<RootOut<<" UPDATED"<<endl<<endl;
-	gROOT->EndOfProcessCleanups();
-	cout<<"term"<<endl<<endl;	
 	
 	return 0;
 }
