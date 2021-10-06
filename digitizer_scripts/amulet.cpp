@@ -24,6 +24,7 @@
 #include <TSystem.h> //gInterpreter->Declare()
 #include <TChain.h>
 #include <TNamed.h>
+#include <TAxis.h>
 #include <TFitResultPtr.h>
 #include <TFitResult.h>
 #include <TGraphAsymmErrors.h>
@@ -68,7 +69,7 @@ long double MEASTIME;
 long double TAUMATERIAL;
 long double TAUP = 2.19703421e-6; 
 long double TAU_carbon = 2025e-9;
-long double TAU_Al = 880e-9;
+long double TAU_Al = 864.6e-9; //880e-9??????
 long double TAU_NaCl = 696e-9;
 
 double NormExpRange( double x, double lambda, double rmin, double rmax){
@@ -106,9 +107,10 @@ class AmuletFitCore {
 		TFitResult AmuletFit(FuncType fType){
 			ChooseFormula(fType);
 			auto tau_idx = _func->GetParNumber("#tau");
-			_func->SetParameter(tau_idx, 2.197e-6);
-			TFitResultPtr fitres = _h.Fit(_func,_fitopt);	
-			_status = fitres->IsValid() && fitres->Status()==0 && fitres->HasMinosError(tau_idx);
+			if( tau_idx != -1 )
+				_func->SetParameter(tau_idx, 2.197e-6);
+			TFitResultPtr fitres = _h.Fit(_func, _fitopt);
+			_status = (tau_idx != -1) ? fitres->IsValid() && fitres->Status()==0 && fitres->HasMinosError(tau_idx) : fitres->IsValid() && fitres->Status()==0;
 			return *fitres;
 		};
 		inline const bool GetStatus(){return _status;};
@@ -233,7 +235,7 @@ class AmuletFitCore {
 								double mu_p   = NormExpRange(t, lambda_p, rmi, rma);
 								double mu_C   = NormExpRange(t, lambda_C, rmi, rma);
 								double mu_Mat = NormExpRange(t, lambda_M, rmi, rma);
-								double signal = f_p*mu_p + f_Mat*mu_Mat + (1.-(f_Mat+f_p))*mu_C;
+								double signal = f_p*mu_p + f_Mat*(1-f_p)*mu_Mat + (1-((1-f_p)*f_Mat+f_p))*mu_C;
 								double bkg    = uniform_pdf(t,rmi,rma);
 								double pdf    = binw*( (nentr-nbkg)*signal + nbkg*bkg  );
 								return (t<=rma && t>=rmi) ? pdf : 0.;
@@ -243,9 +245,9 @@ class AmuletFitCore {
 					_func->FixParameter(1, TAU_carbon);
 					_func->SetParameter(2, TAUMATERIAL);
 					_func->SetParameter(3, 0.004*meastime);
-					_func->FixParameter(4, 0.5376);
-					_func->SetParError (4, 0.084); //TODO??
-					_func->SetParameter(5, 0.1);
+					_func->SetParameter(4, 0.5349);
+					//_func->SetParError (4, 0.002); //TODO??
+					_func->FixParameter(5, 0.6981);
 
 				}
 				break;
@@ -450,17 +452,17 @@ map<const char*, TH1D> GetDecayHistos(RNode df, double binWdt, TString name_pref
 	const char* var = "dt";
 	
 	double max = df.Max<double>(var).GetValue();
-	TH1D htot = *df.Histo1D<double>(	{name_prefix+"Decay",name_prefix+"Decay;time [s];events per "+to_string(binWdt*1e06).substr(0,4)+" #mus",
+	TH1D htot = *df.Histo1D<double>(	{name_prefix+"Decay",name_prefix+"Decay;Time [s];Events per "+to_string(binWdt*1e06).substr(0,5)+" #mus",
 						static_cast<int>((max+0.1*max)/binWdt),0,max+0.1*max},	var);
 	
 	max = df.Filter("topology==1").Max<double>(var).GetValue();
 	TH1D hup = *df.Filter("topology==1")
-		      .Histo1D<double>(	{name_prefix+"UpDecay",name_prefix+"UpDecay;time [s];events per "+to_string(binWdt*1e06).substr(0,4)+" #mus",
+		      .Histo1D<double>(	{name_prefix+"UpDecay",name_prefix+"UpDecay;Time [s];Events per "+to_string(binWdt*1e06).substr(0,5)+" #mus",
 						static_cast<int>((max+0.1*max)/binWdt),0,max+0.1*max},	var);
 	
 	max = df.Filter("topology==0").Max<double>(var).GetValue();
 	TH1D hdwn = *df.Filter("topology==0")
-		       .Histo1D<double>( {name_prefix+"DwnDecay",name_prefix+"DwnDecay;time [s];events per "+to_string(binWdt*1e06).substr(0,4)+" #mus",
+		       .Histo1D<double>( {name_prefix+"DwnDecay",name_prefix+"DwnDecay;Time [s];Events per "+to_string(binWdt*1e06).substr(0,5)+" #mus",
 						static_cast<int>((max+0.1*max)/binWdt),0,max+0.1*max},	var);
 
 	return {{"up",hup},{"dwn",hdwn},{"htot",htot}};
@@ -592,7 +594,13 @@ void WriteBinNumberStabilityFixedRange(RNode decaydf, double rmin, double rmax, 
 		auto fitcore = AmuletFitCore(htot,rmin,rmax,"LERSN0Q");
 		TFitResult fitres = fitcore.AmuletFit(func_type);
 		//fitres.Print("V");
-		auto tau_idx = fitcore.GetParIdx("#tau");
+		const char* tau_name = "#tau";
+		auto tau_idx = fitcore.GetParIdx(tau_name);
+		if ( tau_idx == -1 ){
+			tau_name = "#tau_{#mu^{-}}_{mat}";
+			tau_idx = fitcore.GetParIdx(tau_name);
+			gtau.GetYaxis()->SetTitle(((TString)tau_name)+" [#mus]");
+		}
 		if( fitcore.GetStatus() ){
 			gtau.AddPoint(binWdt*1e9, fitres.Parameter(tau_idx)*1e6);
 			gtau.SetPointError(i, 0, 0, abs(fitres.LowerError(tau_idx))*1e6, fitres.UpperError(tau_idx)*1e6);
@@ -603,7 +611,7 @@ void WriteBinNumberStabilityFixedRange(RNode decaydf, double rmin, double rmax, 
 			if (fitres.Prob()*100 > 5) cout<<" >5% !!!!!";
 			cout<<endl;
 		}else{
-			cout<<"Fit FAILED, status: "<<fitres.Status()<<" valid: "<<fitres.IsValid()<<endl;
+			cout<<" Fit FAILED, status: "<<fitres.Status()<<" valid: "<<fitres.IsValid()<<endl;
 		}
 	}
 	TFile f(RootOut,"UPDATE");
@@ -661,7 +669,13 @@ void WriteRangeStabilityFixedBins(RNode decaydf, double binWdt, int NitMin, int 
 			auto fitcore = AmuletFitCore(htot,rmin,rmax,"LERSN0Q");
 			TFitResult fitres = fitcore.AmuletFit(func_type);
 			//fitres.Print("V");
+			const char* tau_name = "#tau";
 			auto tau_idx = fitcore.GetParIdx("#tau");
+			if ( tau_idx == -1 ){
+				tau_name = "#tau_{#mu^{-}}_{mat}";
+				tau_idx = fitcore.GetParIdx(tau_name);
+				gtau.GetZaxis()->SetTitle(((TString)tau_name)+" [#mus]");
+			}
 			if( fitcore.GetStatus() ){
 				gtau.AddPoint(rmin*1e6, rmax*1e6, fitres.Parameter(tau_idx)*1e6);
 				gtau.SetPointError(Npoint, 0, 0, fitres.Error(tau_idx)*1e6);
@@ -690,8 +704,8 @@ void StabilityAnalysis(RNode decaydf, Option_t *opt, TString RootOut, double rmi
 		WriteBinNumberStabilityFixedRange(decaydf, rmin, rmax, N_iters, RootOut, func_type);
 	}	
 	if( TString(opt).Contains("R") ){
-		int N_iters_min = 25;
-		int N_iters_max = 25;
+		int N_iters_min = 100;
+		int N_iters_max = 100;
 		WriteRangeStabilityFixedBins( decaydf, binWdt, N_iters_min, N_iters_max, RootOut, func_type);
 
 	}
@@ -707,6 +721,10 @@ void WriteLifetimeFit(RNode decaydf, TString RootOut, double binWdt, double rmin
 	cout<<"\tn bins: "<<(rmax-rmin)/binWdt<<endl;
 
 	gStyle->SetOptFit(1111);
+	gStyle->SetOptStat(10);
+	gStyle->SetOptTitle(0);
+	gROOT->ForceStyle();
+	
 	auto hs = GetDecayHistos(decaydf, binWdt, name_prefix);
 	//auto hup = hs["up"], hdwn = hs["dwn"];
 	auto htot = hs["htot"];
@@ -716,14 +734,58 @@ void WriteLifetimeFit(RNode decaydf, TString RootOut, double binWdt, double rmin
 	cout<<"Chi2 prob (GoF): "<<fitres.Prob()*100<<endl;
 	auto f = TFile(RootOut,"UPDATE");
 	TString name = "DecayFit_fType" + to_string(static_cast<short int>(func_type));
-	auto c = TCanvas(name,"decay_fit",500,500);
+	auto c = TCanvas(name,"decay_fit",1173,590);
 	c.cd();
-	fitcore.GetHistoClone()->Draw();
+	auto h = fitcore.GetHistoClone();
+	auto func = (TF1*)h->GetListOfFunctions()->At(0);
+	func->SetLineWidth(2);
+	double tmin, tmax;
+	func->GetRange(tmin,tmax);
+	h->GetYaxis()->SetTitleOffset(0.91);
+	//h->GetYaxis()->SetNdivisions(505);
+	h->GetYaxis()->SetTitleSize(0.05);
+	h->GetYaxis()->SetLabelSize(0.05);
+	h->GetXaxis()->SetTitleOffset(0.95);
+	h->GetXaxis()->SetNdivisions(520);
+	h->GetXaxis()->SetTitleSize(0.05);
+	h->GetXaxis()->SetLabelSize(0.05);
+	h->SetFillStyle(3003);
+	h->SetFillColor(4);
+	h->SetMarkerColor(kBlack);
+	h->SetMarkerStyle(7);
+	h->Sumw2();
+	auto hc = (TH1D*)h->Clone();
+	hc->Draw("hist LF2");
+	h->Draw("e1 same");
+	hc->SetLineWidth(0);
+	//h->DrawClone("same hist");
+	/*double bkg_idx = func->GetParNumber("N_{bkg}");
+	if( bkg_idx != -1 ){ //to show background component explicitly
+		double Nbkg = func->GetParameter(bkg_idx);
+		double eNbkg = func->GetParError(bkg_idx);
+		double biw  = h->GetBinWidth(h->FindBin(tmin+(tmax-tmin)/2.));
+		auto bkg = TF1("Bkg Fit (casual coinc)",[tmin,tmax,biw](double *x, double *p){return p[0]*biw*uniform_pdf(x[0],tmin,tmax);},rmin,rmax,1,"NL");
+		bkg.SetParameter(0,Nbkg);
+		bkg.SetParError(0,eNbkg);
+		bkg.SetLineColor(kViolet);
+		bkg.SetLineStyle(kDashed);
+		bkg.DrawClone("same");
+		func->SetTitle("S+B Fit");
+		func->DrawClone("same");
+		h->SetTitle("Data");
+		c.BuildLegend(0.55,0.45,0.76,0.62,"","e1 x0 l p");
+	}*/
+	c.SetGrid();
+	c.SetTicks();
+	c.Modified();
+	c.Update();
+	c.SaveAs((RootOut.ReplaceAll(".root",name+".pdf")).ReplaceAll("DAQresults","/DAQresults/plots/"),"pdf");
 	c.Write("",TObject::kOverwrite);
+	
 	f.Close();
 }
 
-void WriteAsymmetry(RNode df, TString RootOut, double binWdt, vector<short int> runs = {}, TString name_prefix = "Asymm"){ //FIXME
+void WriteAsymmetry(RNode df, TString RootOut, double binWdt, vector<short int> runs = {}, TString name_prefix = "Asymm"){
 	auto f = TFile(RootOut,"UPDATE");
 	const char* var = "dt";
 	double maxup = df.Filter("topology==1").Max<double>(var).GetValue();
@@ -776,6 +838,9 @@ int main(int argc, char** argv){
 	gInterpreter->Declare("typedef struct {Square_Signal start; Square_Signal stop; double dtFall = stop.sqFall - start.sqFall; double dtFallErr = TMath::Sqrt(stop.sqFallErr*stop.sqFallErr + start.sqFallErr*start.sqFallErr); double dtRise = stop.sqRise - start.sqRise; double dtRiseErr = TMath::Sqrt(stop.sqRiseErr*stop.sqRiseErr + start.sqRiseErr*start.sqRiseErr); } Decay_Event;");
 	gSystem->Load("libMathMore");
 	
+	gStyle->SetPalette(kViridis);
+	gStyle->SetNumberContours(999);
+	
 	//use all cores of your machine MultiThreading to speed up analysis
 	//(read RDataFrame documentation for MT warnings)
 	ROOT::EnableImplicitMT();
@@ -818,7 +883,7 @@ int main(int argc, char** argv){
 			MEASTIME = 1775700;
 			TAUMATERIAL = TAU_Al;
 			fTypes.push_back(AmuletFitCore::FuncType::kMaterial);
-			fTypes.push_back(AmuletFitCore::FuncType::kMassimo);
+			fStabType = AmuletFitCore::FuncType::kMaterial;
 		break;	
 		case RunConfiguration::kNaCl:
 			binWdt = 30e-9; //TODO
@@ -827,7 +892,7 @@ int main(int argc, char** argv){
 			MEASTIME = 2338100;
 			TAUMATERIAL = TAU_NaCl;
 			fTypes.push_back(AmuletFitCore::FuncType::kMaterial);
-			fTypes.push_back(AmuletFitCore::FuncType::kMassimo);
+			fStabType = AmuletFitCore::FuncType::kMaterial;
 		break;	
 		case RunConfiguration::kBkg:
 			binWdt = 1.2e-7; //quella che sceglie in automatico il ttree
@@ -883,7 +948,7 @@ int main(int argc, char** argv){
 	
 	//ExportTxt(decaydf, "dt", RootOut);
 	if(measconf != RunConfiguration::kBkg)
-		StabilityAnalysis(decaydf, "", RootOut, rmin, rmax, binWdt, fStabType );
+		StabilityAnalysis(decaydf, "BR", RootOut, rmin, rmax, binWdt, fStabType );
 	for( const auto & fType : fTypes )
 		WriteLifetimeFit(decaydf, RootOut, binWdt, rmin, rmax, fType);
 	
