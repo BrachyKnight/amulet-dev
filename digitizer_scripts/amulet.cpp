@@ -71,6 +71,7 @@ long double TAUP = 2.19703421e-6;
 long double TAU_carbon = 2025e-9;
 long double TAU_Al = 864.6e-9; //880e-9??????
 long double TAU_NaCl = 696e-9;
+double CHARGERATIORANGECORRECTION = 1.;
 
 double NormExpRange( double x, double lambda, double rmin, double rmax){
 	return exponential_pdf(x,lambda)/(exp(-lambda*rmin)-exp(-lambda*rmax));
@@ -231,11 +232,12 @@ class AmuletFitCore {
 								double nbkg   = p[3];
 								double f_p    = p[4];
 								double f_Mat  = p[5];
+								double f_C    = 1.-(f_p+f_Mat);
 								double t      = x[0];
 								double mu_p   = NormExpRange(t, lambda_p, rmi, rma);
 								double mu_C   = NormExpRange(t, lambda_C, rmi, rma);
 								double mu_Mat = NormExpRange(t, lambda_M, rmi, rma);
-								double signal = f_p*mu_p + f_Mat*(1-f_p)*mu_Mat + (1-((1-f_p)*f_Mat+f_p))*mu_C;
+								double signal = f_p*mu_p + f_Mat*mu_Mat + f_C*mu_C;
 								double bkg    = uniform_pdf(t,rmi,rma);
 								double pdf    = binw*( (nentr-nbkg)*signal + nbkg*bkg  );
 								return (t<=rma && t>=rmi) ? pdf : 0.;
@@ -245,9 +247,9 @@ class AmuletFitCore {
 					_func->FixParameter(1, TAU_carbon);
 					_func->SetParameter(2, TAUMATERIAL);
 					_func->SetParameter(3, 0.004*meastime);
-					_func->SetParameter(4, 0.5349);
-					//_func->SetParError (4, 0.002); //TODO??
-					_func->FixParameter(5, 0.6981);
+					_func->FixParameter(4, 0.53488 + CHARGERATIORANGECORRECTION);
+					_func->SetParameter(5, 0.1);
+					//_func->FixParameter(6,0.3);
 
 				}
 				break;
@@ -595,11 +597,11 @@ void WriteBinNumberStabilityFixedRange(RNode decaydf, double rmin, double rmax, 
 		TFitResult fitres = fitcore.AmuletFit(func_type);
 		//fitres.Print("V");
 		const char* tau_name = "#tau";
-		auto tau_idx = fitcore.GetParIdx(tau_name);
-		if ( tau_idx == -1 ){
+		int tau_idx = fitcore.GetParIdx(tau_name);
+		if ( tau_idx < 0 ){
 			tau_name = "#tau_{#mu^{-}}_{mat}";
 			tau_idx = fitcore.GetParIdx(tau_name);
-			gtau.GetYaxis()->SetTitle(((TString)tau_name)+" [#mus]");
+			gtau.GetYaxis()->SetTitle(TString(tau_name)+" [#mus]");
 		}
 		if( fitcore.GetStatus() ){
 			gtau.AddPoint(binWdt*1e9, fitres.Parameter(tau_idx)*1e6);
@@ -670,8 +672,8 @@ void WriteRangeStabilityFixedBins(RNode decaydf, double binWdt, int NitMin, int 
 			TFitResult fitres = fitcore.AmuletFit(func_type);
 			//fitres.Print("V");
 			const char* tau_name = "#tau";
-			auto tau_idx = fitcore.GetParIdx("#tau");
-			if ( tau_idx == -1 ){
+			int tau_idx = fitcore.GetParIdx("#tau");
+			if ( tau_idx < 0 ){
 				tau_name = "#tau_{#mu^{-}}_{mat}";
 				tau_idx = fitcore.GetParIdx(tau_name);
 				gtau.GetZaxis()->SetTitle(((TString)tau_name)+" [#mus]");
@@ -697,21 +699,8 @@ void WriteRangeStabilityFixedBins(RNode decaydf, double binWdt, int NitMin, int 
 	}
 }
 
-//stability analysis: opt "B" for bin width fit stab, opt: "R" for range stab.
-void StabilityAnalysis(RNode decaydf, Option_t *opt, TString RootOut, double rmin, double rmax, double binWdt, AmuletFitCore::FuncType func_type){
-	if( TString(opt).Contains("B")){
-		int N_iters = 500;
-		WriteBinNumberStabilityFixedRange(decaydf, rmin, rmax, N_iters, RootOut, func_type);
-	}	
-	if( TString(opt).Contains("R") ){
-		int N_iters_min = 100;
-		int N_iters_max = 100;
-		WriteRangeStabilityFixedBins( decaydf, binWdt, N_iters_min, N_iters_max, RootOut, func_type);
 
-	}
-}
-
-void WriteLifetimeFit(RNode decaydf, TString RootOut, double binWdt, double rmin, double rmax, AmuletFitCore::FuncType func_type, const char* name_prefix = ""){
+void WriteLifetimeFit(RNode decaydf, TString RootOut, double binWdt, double rmin, double rmax, AmuletFitCore::FuncType func_type, const char* topology = "htot", const char* name_prefix = ""){
 	
 	cout<<endl<<endl<<endl;	
 	cout<<"LIFETIME FIT for "<<RootOut<<endl;
@@ -726,14 +715,18 @@ void WriteLifetimeFit(RNode decaydf, TString RootOut, double binWdt, double rmin
 	gROOT->ForceStyle();
 	
 	auto hs = GetDecayHistos(decaydf, binWdt, name_prefix);
-	//auto hup = hs["up"], hdwn = hs["dwn"];
-	auto htot = hs["htot"];
-	auto fitcore = AmuletFitCore(htot,rmin,rmax,"LERS");
+	auto hfit = hs[topology]; //topology = "htot", "up", "dwn"
+	auto fitcore = AmuletFitCore(hfit,rmin,rmax,"LERS");
 	TFitResult fitres = fitcore.AmuletFit(func_type);
 	fitres.Print("V");
 	cout<<"Chi2 prob (GoF): "<<fitres.Prob()*100<<endl;
 	auto f = TFile(RootOut,"UPDATE");
 	TString name = "DecayFit_fType" + to_string(static_cast<short int>(func_type));
+	if ((string)topology != "htot"){
+		TString top(topology);
+		top.ToUpper();
+		name += "_topology"+top;
+	}
 	auto c = TCanvas(name,"decay_fit",1173,590);
 	c.cd();
 	auto h = fitcore.GetHistoClone();
@@ -822,6 +815,19 @@ void WriteAsymmetry(RNode df, TString RootOut, double binWdt, vector<short int> 
 
 }
 
+//stability analysis: opt "B" for bin width fit stab, opt: "R" for range stab.
+void StabilityAnalysis(RNode decaydf, Option_t *opt, TString RootOut, double rmin, double rmax, double binWdt, AmuletFitCore::FuncType func_type){
+	if( TString(opt).Contains("B")){
+		int N_iters = 1000;
+		WriteBinNumberStabilityFixedRange(decaydf, rmin, rmax, N_iters, RootOut, func_type);
+	}	
+	if( TString(opt).Contains("R") ){
+		int N_iters_min = 100;
+		int N_iters_max = 100;
+		WriteRangeStabilityFixedBins( decaydf, binWdt, N_iters_min, N_iters_max, RootOut, func_type);
+
+	}
+}
 
 int main(int argc, char** argv){
 	//set names from input line
@@ -863,6 +869,7 @@ int main(int argc, char** argv){
 	vector<AmuletFitCore::FuncType> fTypes;
 	AmuletFitCore::FuncType fStabType = AmuletFitCore::FuncType::kMassimo;
 	vector<short int> runs;
+	vector<const char*> topologies;
 	auto measconf = ChooseConfig(RootOut);
 	switch( measconf ){
 		case RunConfiguration::kCarbon:
@@ -877,20 +884,24 @@ int main(int argc, char** argv){
 			fStabType = AmuletFitCore::FuncType::kMassimo;
 		break;	
 		case RunConfiguration::kAl:
-			binWdt = 45e-9; //TODO
+			binWdt = 38.15e-9; //opt?
 			rmin = 500e-9;  //TODO
 			rmax = 10e-6;   //TODO
 			MEASTIME = 1775700;
 			TAUMATERIAL = TAU_Al;
+			topologies = {"htot"/*,"up","dwn"*/};
+			CHARGERATIORANGECORRECTION = 0.054516; 
 			fTypes.push_back(AmuletFitCore::FuncType::kMaterial);
 			fStabType = AmuletFitCore::FuncType::kMaterial;
 		break;	
 		case RunConfiguration::kNaCl:
-			binWdt = 30e-9; //TODO
+			binWdt = 18.18e-9; //opt?
 			rmin = 0.5e-6;  //TODO
 			rmax = 8.7e-6;  //TODO
 			MEASTIME = 2338100;
 			TAUMATERIAL = TAU_NaCl;
+			topologies = {"htot"/*,"up","dwn"*/};
+			CHARGERATIORANGECORRECTION = 0.058460; 
 			fTypes.push_back(AmuletFitCore::FuncType::kMaterial);
 			fStabType = AmuletFitCore::FuncType::kMaterial;
 		break;	
@@ -950,7 +961,11 @@ int main(int argc, char** argv){
 	if(measconf != RunConfiguration::kBkg)
 		StabilityAnalysis(decaydf, "BR", RootOut, rmin, rmax, binWdt, fStabType );
 	for( const auto & fType : fTypes )
-		WriteLifetimeFit(decaydf, RootOut, binWdt, rmin, rmax, fType);
+		if( topologies.size() == 0 )
+			WriteLifetimeFit(decaydf, RootOut, binWdt, rmin, rmax, fType);
+		else 
+			for( const auto & top : topologies )
+				WriteLifetimeFit(decaydf, RootOut, binWdt, rmin, rmax, fType, top);
 	
 	WriteAsymmetry(decaydf, RootOut, 6.5e-7/3, runs);
 		
