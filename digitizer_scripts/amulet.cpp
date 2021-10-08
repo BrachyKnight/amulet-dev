@@ -268,13 +268,13 @@ class AmuletFitCore {
 				case FuncType::kUniform: //normalized pdf (two parameters)
 				{
 					_func = new TF1("bkg_law",
-							[rmi,rma](double*x, double *p)->double{	
+							[rmi,rma,binw](double*x, double *p)->double{	
 								double B = p[0];
 								double t = x[0];
-								return (t<=rma && t>=rmi) ? B*uniform_pdf(t,rmi,rma) : 0.;
+								return (t<=rma && t>=rmi) ? binw*B*uniform_pdf(t,rmi,rma) : 0.;
 							}, _rmin, _rmax, 1, "NL" );
-					_func->SetParNames("B");
-					_func->SetParameter("B",_h.GetBinContent(_h.FindBin(_rmax))*(rma-rmi));
+					_func->SetParNames("N_{bkg}");
+					_func->SetParameter("N_{bkg}",_h.GetBinContent(_h.FindBin(_rmax))*(rma-rmi));
 				}
 				break;
 			}
@@ -906,9 +906,9 @@ int main(int argc, char** argv){
 			fStabType = AmuletFitCore::FuncType::kMaterial;
 		break;	
 		case RunConfiguration::kBkg:
-			binWdt = 1.2e-7; //quella che sceglie in automatico il ttree
-			rmin = 30e-6;    //scelta guardando plot
-			rmax = 38e-6;    //scelta guardando plot
+			binWdt = 3*1.2e-7; //quella che sceglie in automatico il ttree
+			rmin = 29.5e-6;    //scelta guardando plot
+			rmax = 39e-6;    //scelta guardando plot
 			MEASTIME = 1194420.;
 			TAUMATERIAL = 0;
 			fTypes.push_back(AmuletFitCore::FuncType::kUniform);
