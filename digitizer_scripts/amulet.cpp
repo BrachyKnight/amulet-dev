@@ -71,7 +71,7 @@ long double TAUP = 2.19703421e-6;
 long double TAU_carbon = 2025e-9;
 long double TAU_Al = 864.6e-9; //880e-9??????
 long double TAU_NaCl = 696e-9;
-double CHARGERATIORANGECORRECTION = 1.;
+double CHARGERATIORANGECORRECTION = 0; //additivo
 
 double NormExpRange( double x, double lambda, double rmin, double rmax){
 	return exponential_pdf(x,lambda)/(exp(-lambda*rmin)-exp(-lambda*rmax));
@@ -704,6 +704,7 @@ void WriteLifetimeFit(RNode decaydf, TString RootOut, double binWdt, double rmin
 	
 	cout<<endl<<endl<<endl;	
 	cout<<"LIFETIME FIT for "<<RootOut<<endl;
+	cout<<"\ttopology: "<<topology<<endl;
 	cout<<"\tfType: "<<static_cast<short int>(func_type)<<endl;
 	cout<<"\tbWdt: "<<binWdt<<endl;
 	cout<<"\trmin: "<<rmin<<"\n\trmax: "<<rmax<<endl;
@@ -716,6 +717,8 @@ void WriteLifetimeFit(RNode decaydf, TString RootOut, double binWdt, double rmin
 	
 	auto hs = GetDecayHistos(decaydf, binWdt, name_prefix);
 	auto hfit = hs[topology]; //topology = "htot", "up", "dwn"
+
+	cout<<"\tn entries in fit range "<<hfit.Integral(hfit.FindBin(rmin), hfit.FindBin(rmax))<<endl;
 	auto fitcore = AmuletFitCore(hfit,rmin,rmax,"LERS");
 	TFitResult fitres = fitcore.AmuletFit(func_type);
 	fitres.Print("V");
@@ -774,7 +777,13 @@ void WriteLifetimeFit(RNode decaydf, TString RootOut, double binWdt, double rmin
 	c.Update();
 	c.SaveAs((RootOut.ReplaceAll(".root",name+".pdf")).ReplaceAll("DAQresults","/DAQresults/plots/"),"pdf");
 	c.Write("",TObject::kOverwrite);
-	
+	/*
+	auto cont = new TGraph(1000);
+	cont->SetNameTitle("contour","contour;tau;fraction");
+	fitres.Contour(2,5,cont);
+	cont->Write("",TObject::kOverwrite);
+	*/
+		
 	f.Close();
 }
 
@@ -884,9 +893,9 @@ int main(int argc, char** argv){
 			fStabType = AmuletFitCore::FuncType::kMassimo;
 		break;	
 		case RunConfiguration::kAl:
-			binWdt = 38.15e-9; //opt?
-			rmin = 500e-9;  //TODO
-			rmax = 10e-6;   //TODO
+			binWdt = 38.15e-9; //opt
+			rmin = 500e-9;     //opt
+			rmax = 10e-6;      //opt
 			MEASTIME = 1775700;
 			TAUMATERIAL = TAU_Al;
 			topologies = {"htot"/*,"up","dwn"*/};
@@ -895,9 +904,9 @@ int main(int argc, char** argv){
 			fStabType = AmuletFitCore::FuncType::kMaterial;
 		break;	
 		case RunConfiguration::kNaCl:
-			binWdt = 18.18e-9; //opt?
-			rmin = 0.5e-6;  //TODO
-			rmax = 8.7e-6;  //TODO
+			binWdt = 35.3e-9;  //opt
+			rmin = 0.5e-6;     //opt
+			rmax = 8.7e-6;     //opt
 			MEASTIME = 2338100;
 			TAUMATERIAL = TAU_NaCl;
 			topologies = {"htot"/*,"up","dwn"*/};
@@ -915,23 +924,23 @@ int main(int argc, char** argv){
 			fTypes.push_back(AmuletFitCore::FuncType::kConst);
 		break;	
 		case RunConfiguration::kBon:
-			binWdt = 60e-9; //TODO
-			rmin = 0.5e-6;  //TODO
-			rmax = 9.1e-6;  //TODO
+			binWdt = 60e-9; //opt
+			rmin = 0.5e-6;  //opt
+			rmax = 10e-6;   //opt
 			MEASTIME = 3115900;
 			TAUMATERIAL = TAU_carbon;
+			topologies = {"htot","up","dwn"};
 			fTypes.push_back(AmuletFitCore::FuncType::kMassimo);
-			fTypes.push_back(AmuletFitCore::FuncType::kMassimoFraction);
 		break;	
 		case RunConfiguration::kBoff:
-			binWdt = 60e-9; //TODO
-			rmin = 0.5e-6;  //TODO
-			rmax = 9.1e-6;	//TODO
+			binWdt = 60e-9; //opt
+			rmin = 0.5e-6;  //opt
+			rmax = 10e-6;	//opt
 			MEASTIME = 2935200;
 			TAUMATERIAL = TAU_carbon;
 			runs = {10,8};
+			topologies = {"htot","up","dwn"};
 			fTypes.push_back(AmuletFitCore::FuncType::kMassimo);
-			fTypes.push_back(AmuletFitCore::FuncType::kMassimoFraction);
 		break;
 		case RunConfiguration::kRunNotPresent:
 			binWdt = 0;
@@ -959,7 +968,7 @@ int main(int argc, char** argv){
 	
 	//ExportTxt(decaydf, "dt", RootOut);
 	if(measconf != RunConfiguration::kBkg)
-		StabilityAnalysis(decaydf, "BR", RootOut, rmin, rmax, binWdt, fStabType );
+		StabilityAnalysis(decaydf, "", RootOut, rmin, rmax, binWdt, fStabType );
 	for( const auto & fType : fTypes )
 		if( topologies.size() == 0 )
 			WriteLifetimeFit(decaydf, RootOut, binWdt, rmin, rmax, fType);
