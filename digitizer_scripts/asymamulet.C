@@ -58,13 +58,93 @@ TH1* GetFourierTransform(TH1* asymmetry){
 	return hfft;
 }
 
-void asymamulet(){
-
+TH1* GetBKGSubtractedAsymmetry(){
 	auto res = GetMagneticDF();
 	auto sig = GetDFAsymmetry(res[0], (10e-6-500e-9)/25, 10e-6);
 	auto bkg = GetDFAsymmetry(res[1], (10e-6-500e-9)/25, 10e-6);
 
-	auto asym.Clone("asym");
+	auto asym = (TH1*)sig->Clone("asym");
+	asym->Add(bkg, -1.);
+	delete sig;
+	delete bkg;
+	return asym;
+}
+
+TH1* GetSignalAsymmetry(){
+	auto res = GetMagneticDF();
+	auto sig = GetDFAsymmetry(res[0], (10e-6-500e-9)/25, 10e-6);
+
+	return sig;
+}
+
+TH1* GetBkgAsymmetry(){
+	auto res = GetMagneticDF();
+	auto bkg = GetDFAsymmetry(res[1], (10e-6-500e-9)/25, 10e-6);
+
+	return bkg;
+}
+
+void asymamulet(){
+
+	gStyle->SetOptFit(1111);
+	gStyle->SetOptTitle(0);
+	TCanvas* c0 = new TCanvas("Bkg","Bkg",500,500);
+	auto bkg = GetBkgAsymmetry();
+	bkg->Draw("e1 p");
+	TCanvas* c1 = new TCanvas("BkgSub","BkgSub",500,500);
+	auto sigsub =  GetBKGSubtractedAsymmetry();
+	sigsub->Draw("e1 p");
+	TCanvas* c2 = new TCanvas();
+	auto sig = GetSignalAsymmetry();
+	sig->Draw("e1 p");
+	
+	
+	auto f = new TF1("func",[](double *x, double *p){
+			double Nd = 2518;
+			double Nu = 1580;
+			double A = Nu + Nd;
+			double B = Nu - Nd;
+			double bu = 68.06;
+			double bd = 66.16;
+			double C = bu - bd;
+			double D = bu + bd;
+			double xi = p[0];
+			double Xi = xi/6;
+			double omega = p[1];
+			double t = x[0];
+			double tau = 2.033e-6;//(2.192e-6*(1/pow(6.97e-8,2))+1.953e-6*(1/pow(4.52e-8,2)))/(1/pow(6.97e-8,2)+1/pow(4.52e-8,2));
+			double NUM = A*Xi*cos(omega*t) + B + C*exp(t/tau);
+			double DEN = B*Xi*cos(omega*t) + A + D*exp(t/tau);
+			return NUM/DEN;;
+			}, 2e-6, 10e-6, 2,"NL");
+	f->SetParNames("#xi","#omega");
+	f->SetParameters(0.35,2e06);
+
+	sig->Fit(f, "R", "", 2e-6, 10e-6);
+	
+	c0->cd();
+	
+	auto f1 = new TF1("f1",[](double *x, double *p){
+			double Nd = 4267;
+			double Nu = 2562;
+			double A = Nu + Nd;
+			double B = Nu - Nd;
+			double bu = 119;
+			double bd = 132;
+			double C = bu - bd;
+			double D = bu + bd;
+			double t = x[0];
+			double tau = 2.01e-6; 
+			double NUM = B + C*exp(t/tau);
+			double DEN = A + D*exp(t/tau);
+			return NUM/DEN + p[0];;
+			}, 2e-6, 10e-6, 1,"NL");
+	f1->Draw("same");
+	f1->SetParNames("K");
+	bkg->Fit(f1,"R","",2e-6,10e-6);
+	double chi2 = bkg->Chisquare(f1, "R");
+	cout<<"chi2 = "<<chi2<<endl;
+	cout<<"prob = "<<TMath::Prob(chi2, 21)<<endl;
 
 }
 

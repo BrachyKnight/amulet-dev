@@ -104,6 +104,7 @@ class AmuletFitCore {
 			kMassimoFreeN = 6,
 			kMassimoFraction = 7,
 			kMaterial = 8,
+			kSimpleDecayLaw = 9,
 		};
 		TFitResult AmuletFit(FuncType fType){
 			ChooseFormula(fType);
@@ -146,6 +147,13 @@ class AmuletFitCore {
 					_func->SetParNames("#tau","b","N");
 					_func->SetParameter("b",_h.GetBinContent(_h.FindBin(_rmax)));
 					_func->SetParameter("N",_h.GetBinContent(_h.FindBin(_rmin))*(2.197e-6));
+				}
+				break;
+				case FuncType::kSimpleDecayLaw: //exponential pdf + const bkg
+				{
+					_func = new TF1("decay_law","[N]*exp(-x/[#tau])+[b]", rmi, rma);
+					_func->SetParameter("b",_h.GetBinContent(_h.FindBin(_rmax)));
+					_func->SetParameter("N",_h.GetBinContent(_h.FindBin(_rmin)));
 				}
 				break;
 				case FuncType::kNormExpNormB: //exponential pdf + uniform pdf (const bkg)
@@ -512,8 +520,15 @@ void WriteDecayTree(RNode dfUp, RNode dfDwn, TFile* f){
 	vector<short int> dwMeasN = *dfDwn.Take<short int>("measN");
 	vector<unsigned long long> upidx = *dfUp.Take<unsigned long long>("idx");
 	vector<unsigned long long> dwidx = *dfDwn.Take<unsigned long long>("idx");
-	vector<short int> upRunN = *dfUp.Take<short int>("runN");
-	vector<short int> dwRunN = *dfDwn.Take<short int>("runN");
+	vector<short int> upRunNshort = *dfUp.Take<short int>("runN");
+	vector<short int> dwRunNshort = *dfDwn.Take<short int>("runN");
+	vector<int> upRunN;
+	vector<int> dwRunN;
+	for( const auto & runN : upRunNshort )
+		upRunN.push_back(static_cast<int>(runN));
+	for( const auto & runN : dwRunNshort )
+		dwRunN.push_back(static_cast<int>(runN));
+	
 	double dt, startWdt, stopWdt;
 	int runN, measN;
        	unsigned long long idx;
@@ -827,7 +842,7 @@ void WriteAsymmetry(RNode df, TString RootOut, double binWdt, vector<short int> 
 //stability analysis: opt "B" for bin width fit stab, opt: "R" for range stab.
 void StabilityAnalysis(RNode decaydf, Option_t *opt, TString RootOut, double rmin, double rmax, double binWdt, AmuletFitCore::FuncType func_type){
 	if( TString(opt).Contains("B")){
-		int N_iters = 1000;
+		int N_iters = 100;
 		WriteBinNumberStabilityFixedRange(decaydf, rmin, rmax, N_iters, RootOut, func_type);
 	}	
 	if( TString(opt).Contains("R") ){
@@ -933,14 +948,15 @@ int main(int argc, char** argv){
 			fTypes.push_back(AmuletFitCore::FuncType::kMassimo);
 		break;	
 		case RunConfiguration::kBoff:
-			binWdt = 60e-9; //opt
-			rmin = 0.5e-6;  //opt
+			binWdt = (10e-6-500e-9)/25.;//60e-9; //opt
+			rmin = 1e-6;  //opt
 			rmax = 10e-6;	//opt
 			MEASTIME = 2935200;
 			TAUMATERIAL = TAU_carbon;
 			runs = {10,8};
 			topologies = {"htot","up","dwn"};
 			fTypes.push_back(AmuletFitCore::FuncType::kMassimo);
+			fTypes.push_back(AmuletFitCore::FuncType::kSimpleDecayLaw);
 		break;
 		case RunConfiguration::kRunNotPresent:
 			binWdt = 0;
@@ -976,7 +992,7 @@ int main(int argc, char** argv){
 			for( const auto & top : topologies )
 				WriteLifetimeFit(decaydf, RootOut, binWdt, rmin, rmax, fType, top);
 	
-	WriteAsymmetry(decaydf, RootOut, 6.5e-7/3, runs);
+	WriteAsymmetry(decaydf, RootOut, (10e-6-500e-9)/25, runs);
 		
 	
 	cout<<"File "<<RootOut<<" UPDATED"<<endl<<endl;
