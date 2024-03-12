@@ -1,7 +1,7 @@
-# AMULET
+# AMULET-DEV
 <!-- ABOUT THE PROJECT -->
 ## About The Project
-AMULET (Analysis MUon LifETime) consists in a series of C++ and python scripts written to analyze data relative to the life-times of cosmic muons.
+This is a fork of the project AMULET (Analysis MUon LifETime), that consists in a series of C++ and python scripts written to analyze data relative to the life-times of cosmic muons. I made this fork to continue experimenting on it and to add support for a devcontainer / docker environment for ease of use.
 The project has two main parts:
 * Reading data taken with a caen digitizer (CAEN DT5751). This is the most important part and it is actually the main focus of this project.
 * Analyze data to produce plots, perform fit, and do everything is needed to measure in the most accurate way the lifetime of cosmic muons decaying both in carbon (scintillator material) and other materials. 
@@ -55,25 +55,22 @@ After having downloaded the project and compiled all the C++ script using the li
     - you can open the file with a TBrowser and plot your distributions, there will be a lot of them but I'm sure you can figure out what they are :wink:
 5. Now you can start your analysis of muon lifetime!! you can use the scripts in the folder amulet_analysis/ but they are quite buggy and they are strictly related to my set of data, so it is meant to be more like an example.
 
-**_Contact me for any question, I will be more than happy to explain more in detail how the code works_**
+## Usage with devcontainer
+If you are having trouble configuring your environment to run the scripts (looking at you mascarpone), you can use the devcontainer provided in the .devcontainer/ folder. This is a docker container that contains all the necessary commands and packages to run the scripts. You can use it by following these steps:
 
-<!-- CONTRIBUTING -->
-## Contributing
-This code has some serious problems, in particular in the first part (the xmltoTTree.cpp code that calls the python script to read the xml data). I would love to improve the code but I am focusing more on the analysis part. Anyway, I strongly believe that the RDataFrame/TTree-approach has a great potential, even if it is a bit overcomplicated. This method of analyzing data could lead to a better overall quality of the resut, expecially if combined with a Monte Carlo GEANT4 simulation. For these reason I would be happy if anyone will contribute to the project.
-Moreover, as always, contributions are what make the open source community such an amazing place to be learn, inspire, and create. Any contributions you make are **greatly appreciated** :smile: .
-
-1. Create your Feature Branch (`git checkout -b feature/AmazingFeature`)
-2. Commit your Changes (`git commit -m 'Add some AmazingFeature'`)
-3. Push to the Branch (`git push origin feature/AmazingFeature`)
-4. Open a Pull Request
-
+1. Download and install Docker Desktop from [https://www.docker.com/products/docker-desktop](https://www.docker.com/products/docker-desktop) (if you don't have [WSL2](https://docs.microsoft.com/en-us/windows/wsl/install-win10) installed, you will be prompted to install it)
+2. Download and install Visual Studio Code from [https://code.visualstudio.com/](https://code.visualstudio.com/)
+3. Install the Remote - Containers extension for Visual Studio Code from [https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers)
+4. Clone this project in your local machine using `git clone https://github.com/BrachyKnight/amulet-dev`
+5. Open the project in Visual Studio Code
+6. Click on the bottom left corner of the window where it says "Open a Remote Window" and select "Reopen in Container", or open the command palette (Ctrl+Shift+P) and type "Dev Containers: Reopen in Container"
+7. The first time you open the project in the devcontainer, it will take a while to build. After that, you will be inside the container and you can run the scripts as described in the previous section.
+8. Profit (not really, this is an open source project, but you get the idea :wink:)
 
 <!-- CONTACT -->
 ## Contact
 
-Your Name - massimogirola1@gmail.com - m.girola2@campus.unimib.it
-
-Project Link: [https://github.com/mgirola/amulet](https://github.com/mgirola/amulet)
+Original Project Link: [https://github.com/mgirola/amulet](https://github.com/mgirola/amulet)
 
 
 <!-- ACKNOWLEDGEMENTS -->

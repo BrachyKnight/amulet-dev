@@ -11,11 +11,11 @@ for filename in ${DAQERMFOLDER}/run${RUN}meas*.xml; do
 done
 
 for filename in ${DAQERMFOLDER}/run${RUN}meas*.xml; do
-	./../digitizer_scripts/xmltoTTreeRDF ${DAQERMFOLDER}/../DAQpreprocessed/ "$filename"
+	./xmltoTTreeRDF ${DAQPROCESSEDFOLDER} "$filename"
 done
 
-for filename in ${DAQERMFOLDER}/../DAQpreprocessed/run${RUN}meas*_amulet.root; do
-	./../digitizer_scripts/logicSignalAnalysis "$filename"
+for filename in ${DAQPROCESSEDFOLDER}/run${RUN}meas*_amulet.root; do
+	./logicSignalAnalysis "$filename"
 done
 
-./../digitizer_scripts/lifetime ${DAQPROCESSEDFOLDER} ${DAQERMFOLDER}/../DAQpreprocessed/ ${RUN}
+./lifetime ${DAQPROCESSEDFOLDER} ${DAQPROCESSEDFOLDER} ${RUN}
