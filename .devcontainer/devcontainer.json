@@ -24,7 +24,9 @@
 				"ms-vscode-remote.vscode-remote-extensionpack",
 				"ms-vscode.remote-explorer",
                 "ms-python.python",
-                "ms-vscode.cpptools"
+                "ms-vscode.cpptools",
+				"albertopdrf.root-file-viewer",
+				"ms-vscode.cmake-tools"
 			]
 		}
 	},
